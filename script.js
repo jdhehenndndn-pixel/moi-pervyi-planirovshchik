@@ -2,6 +2,8 @@
   "use strict";
 
   const STORAGE_KEY = "quietPace.appState.v1";
+  const QUOTE_ROTATION_KEY = "myCorner.quoteRotation.v1";
+  const QUOTE_ROTATION_INTERVAL_MS = 5 * 60 * 60 * 1000;
   const SCHEMA_VERSION = 1;
   const MOSCOW_TIME_ZONE = "Europe/Moscow";
   const MAX_KOPECKS = 99_999_999_999;
@@ -22,6 +24,20 @@
     aiSkills: "ИИ-навыки",
     other: "Другое",
   };
+  const CORNER_QUOTES = Object.freeze([
+    Object.freeze({
+      text: "«Скоро мы будем на месте».",
+      source: "Муми-мама · «Муми-папа и море»",
+    }),
+    Object.freeze({
+      text: "«Не тревожься: нам приснятся чудесные сны, а когда мы проснёмся, уже будет весна».",
+      source: "Снусмумрик · «Шляпа волшебника»",
+    }),
+    Object.freeze({
+      text: "«Повсюду появились новые сильные краски, и красные ягоды рябины сияли вокруг».",
+      source: "«В конце ноября»",
+    }),
+  ]);
 
   function pad(value) {
     return String(value).padStart(2, "0");
@@ -516,7 +532,7 @@
   function validateTaskInput(input, { editing = false } = {}) {
     const value = normalizeTaskInput(input);
     const errors = {};
-    if (!value.description) errors.description = "Введите описание задачи";
+    if (!value.description) errors.description = "Напишите, что нужно сделать";
     else if (value.description.length > 500) errors.description = "Не больше 500 символов";
     if (!isValidDateKey(value.date)) errors.date = "Выберите корректную дату";
     if (value.time !== null && !isValidTimeKey(value.time)) errors.time = "Введите время в формате ЧЧ:ММ";
@@ -527,7 +543,7 @@
     } else if (value.customProduct && value.customProduct.length > 80) {
       errors.customProduct = "Не больше 80 символов";
     }
-    if (!editing && value.status !== "planned") errors.status = "Новая задача создаётся запланированной";
+    if (!editing && value.status !== "planned") errors.status = "Новое дело будет запланировано";
     if (editing && !VALID_TASK_STATUSES.has(value.status)) errors.status = "Выберите статус";
     if (value.contactLabel && value.contactLabel.length > 50) errors.contactLabel = "Не больше 50 символов";
     if (value.contactValue && value.contactValue.length > 500) errors.contactValue = "Не больше 500 символов";
@@ -785,6 +801,8 @@
   let draggingTaskId = null;
   let pendingImportedState = null;
   let pendingDataOperation = null;
+  let quoteRotationState = { index: 0, changedAt: Date.now() };
+  let quoteRotationTimer = null;
   const dialogTriggers = new WeakMap();
 
   const elements = {};
@@ -811,6 +829,8 @@
     elements.periodTitle = document.querySelector("#period-title");
     elements.periodCaption = document.querySelector("#period-caption");
     elements.plannerSurface = document.querySelector("#planner-surface");
+    elements.cornerQuoteText = document.querySelector("#corner-quote-text");
+    elements.cornerQuoteSource = document.querySelector("#corner-quote-source");
     elements.storageWarning = document.querySelector("#storage-warning");
     elements.storageWarningText = document.querySelector("#storage-warning-text");
     elements.conflictWarning = document.querySelector("#conflict-warning");
@@ -822,6 +842,7 @@
     elements.taskErrorSummary = document.querySelector("#task-error-summary");
     elements.customProductField = document.querySelector("#custom-product-field");
     elements.taskStatusField = document.querySelector("#task-status-field");
+    elements.taskContactSection = document.querySelector("#task-contact-section");
     elements.taskDelete = document.querySelector("#task-delete");
     elements.overdueTasks = document.querySelector("#overdue-tasks");
     elements.overdueCount = document.querySelector("#overdue-count");
@@ -868,6 +889,65 @@
     if (className) node.className = className;
     if (text !== undefined) setText(node, text);
     return node;
+  }
+
+  function saveQuoteRotationState() {
+    try {
+      window.localStorage.setItem(QUOTE_ROTATION_KEY, JSON.stringify(quoteRotationState));
+    } catch (_error) {
+      // Цитаты остаются рабочими в текущей вкладке, даже если хранилище недоступно.
+    }
+  }
+
+  function loadQuoteRotationState(now = Date.now()) {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem(QUOTE_ROTATION_KEY) || "null");
+      if (
+        stored &&
+        Number.isInteger(stored.index) &&
+        stored.index >= 0 &&
+        Number.isFinite(stored.changedAt) &&
+        stored.changedAt > 0 &&
+        stored.changedAt <= now
+      ) {
+        quoteRotationState = {
+          index: stored.index % CORNER_QUOTES.length,
+          changedAt: stored.changedAt,
+        };
+        return;
+      }
+    } catch (_error) {
+      // Повреждённая декоративная настройка не должна мешать планировщику.
+    }
+    quoteRotationState = { index: 0, changedAt: now };
+    saveQuoteRotationState();
+  }
+
+  function scheduleQuoteRotation() {
+    if (quoteRotationTimer !== null) window.clearTimeout(quoteRotationTimer);
+    const elapsed = Math.max(0, Date.now() - quoteRotationState.changedAt);
+    const delay = Math.max(1_000, QUOTE_ROTATION_INTERVAL_MS - elapsed);
+    quoteRotationTimer = window.setTimeout(() => syncCornerQuote(), delay + 50);
+  }
+
+  function syncCornerQuote(now = Date.now()) {
+    if (now < quoteRotationState.changedAt) {
+      quoteRotationState = { index: quoteRotationState.index, changedAt: now };
+      saveQuoteRotationState();
+    }
+    const elapsed = now - quoteRotationState.changedAt;
+    const steps = Math.floor(elapsed / QUOTE_ROTATION_INTERVAL_MS);
+    if (steps > 0) {
+      quoteRotationState = {
+        index: (quoteRotationState.index + steps) % CORNER_QUOTES.length,
+        changedAt: quoteRotationState.changedAt + steps * QUOTE_ROTATION_INTERVAL_MS,
+      };
+      saveQuoteRotationState();
+    }
+    const quote = CORNER_QUOTES[quoteRotationState.index];
+    setText(elements.cornerQuoteText, quote.text);
+    setText(elements.cornerQuoteSource, quote.source);
+    scheduleQuoteRotation();
   }
 
   function showToast(message) {
@@ -1012,7 +1092,8 @@
       image.alt = illustration.alt;
       image.width = illustration.width;
       image.height = illustration.height;
-      image.loading = "lazy";
+      image.loading = illustration.loading || "lazy";
+      if (image.loading === "eager") image.fetchPriority = "high";
       image.decoding = "async";
       container.classList.add("empty-state--illustrated");
       container.append(image);
@@ -1076,10 +1157,10 @@
     check.disabled = task.status === "cancelled";
     check.dataset.action = "toggle-task";
     check.dataset.taskId = task.id;
-    check.setAttribute("aria-label", check.checked ? "Вернуть задачу в запланированные" : "Отметить задачу выполненной");
+    check.setAttribute("aria-label", check.checked ? "Вернуть дело в запланированные" : "Отметить дело выполненным");
     controls.append(check);
     if (task.status === "planned" && window.matchMedia("(min-width: 960px)").matches) {
-      const handle = makeActionButton("Перетащить задачу", "drag-task", task.id, "grip", "task-action task-drag-handle");
+      const handle = makeActionButton("Перетащить дело", "drag-task", task.id, "grip", "task-action task-drag-handle");
       handle.draggable = true;
       controls.append(handle);
     }
@@ -1115,7 +1196,7 @@
       contact.append(tooltip);
       actions.append(contact, makeActionButton("Копировать контакт", "copy-contact", task.id, "copy"));
     }
-    actions.append(makeActionButton("Переместить задачу в корзину", "delete-task", task.id, "trash", "task-action task-action--danger"));
+    actions.append(makeActionButton("Переместить дело в корзину", "delete-task", task.id, "trash", "task-action task-action--danger"));
     card.append(controls, body, actions);
     return card;
   }
@@ -1200,13 +1281,19 @@
     const row = createElement(compact ? "span" : "div", compact ? "daily-finance daily-finance--compact" : "daily-finance");
     row.setAttribute("aria-label", `Факт ${formatKopecks(metrics.factKopecks)}, ожидание ${formatKopecks(metrics.expectationKopecks)}`);
     if (compact) {
-      const fact = createElement("span", "daily-finance__fact");
-      fact.append(createElement("span", "daily-finance__label", "Факт"), createElement("span", "daily-finance__value", formatKopecks(metrics.factKopecks).replace(/[\u00a0\u202f]/g, " ")));
-      const expectation = createElement("span", "daily-finance__expectation");
-      expectation.append(createElement("span", "daily-finance__label", "Ожидание"), createElement("span", "daily-finance__value", formatKopecks(metrics.expectationKopecks).replace(/[\u00a0\u202f]/g, " ")));
-      row.append(fact, expectation);
+      if (metrics.factKopecks > 0) {
+        const fact = createElement("span", "daily-finance__fact");
+        fact.append(createElement("span", "daily-finance__label", "Получено"), createElement("span", "daily-finance__value", formatKopecks(metrics.factKopecks).replace(/[\u00a0\u202f]/g, " ")));
+        row.append(fact);
+      }
+      if (metrics.expectationKopecks > 0) {
+        const expectation = createElement("span", "daily-finance__expectation");
+        expectation.append(createElement("span", "daily-finance__label", "Жду"), createElement("span", "daily-finance__value", formatKopecks(metrics.expectationKopecks).replace(/[\u00a0\u202f]/g, " ")));
+        row.append(expectation);
+      }
+      if (!row.childElementCount) row.hidden = true;
     } else {
-      row.append(createElement("span", "daily-finance__fact", `Факт ${formatKopecks(metrics.factKopecks)}`), createElement("span", "daily-finance__expectation", `Ожидание ${formatKopecks(metrics.expectationKopecks)}`));
+      row.append(createElement("span", "daily-finance__fact", `Получено ${formatKopecks(metrics.factKopecks)}`), createElement("span", "daily-finance__expectation", `Жду ${formatKopecks(metrics.expectationKopecks)}`));
     }
     return row;
   }
@@ -1250,7 +1337,7 @@
   }
 
   function buildPlanButton(type, exists) {
-    const emptyLabel = type === "month" ? "Установить план месяца" : "Задать план недели";
+    const emptyLabel = type === "month" ? "Добавить план месяца" : "Добавить план недели";
     const button = createElement("button", "button button--secondary", exists ? "Изменить план" : emptyLabel);
     button.type = "button";
     button.dataset.action = "open-plan";
@@ -1266,7 +1353,7 @@
     const card = createElement("article", "summary-card summary-card--primary summary-card--finance");
     const header = createElement("div", "summary-card__header");
     const title = createElement("div");
-    title.append(createElement("p", "summary-card__label", "Месяц · основной ориентир"), createElement("h2", "", capitalize(formatDate(`${monthKey}-01`, { month: "long", year: "numeric" }))));
+    title.append(createElement("p", "summary-card__label", "Этот месяц"), createElement("h2", "", capitalize(formatDate(`${monthKey}-01`, { month: "long", year: "numeric" }))));
     header.append(title, buildPlanButton("month", Boolean(plan)));
     const metricsGrid = createElement("div", "finance-metrics");
     metricsGrid.append(
@@ -1276,10 +1363,10 @@
     );
     metricsGrid.append(
       metrics.isCurrentMonth
-        ? buildMetric("Ранрейт", formatKopecks(metrics.runRateKopecks), "По календарным дням")
-        : buildMetric("Ранрейт", "—", "Только для текущего месяца"),
+        ? buildMetric("Прогноз", formatKopecks(metrics.runRateKopecks), "К концу месяца")
+        : buildMetric("Прогноз", "—", "Только для текущего месяца"),
     );
-    metricsGrid.append(buildMetric("Ожидание", formatKopecks(metrics.expectationKopecks)));
+    metricsGrid.append(buildMetric("Жду", formatKopecks(metrics.expectationKopecks)));
     card.append(header, metricsGrid, buildProgressBars(plan, metrics.factKopecks));
     return card;
   }
@@ -1292,14 +1379,14 @@
     const card = createElement("article", "summary-card summary-card--finance summary-card--week");
     const header = createElement("div", "summary-card__header");
     const title = createElement("div");
-    title.append(createElement("p", "summary-card__label", "Неделя · дополнительный ориентир"), createElement("h2", "", formatWeekRange(selected)));
+    title.append(createElement("p", "summary-card__label", "Эта неделя"), createElement("h2", "", formatWeekRange(selected)));
     header.append(title, buildPlanButton("week", Boolean(plan)));
     const metricsGrid = createElement("div", "finance-metrics finance-metrics--compact");
     metricsGrid.append(
       buildMetric("План", plan ? formatKopecks(plan) : "План не задан"),
       buildMetric("Факт", formatKopecks(metrics.factKopecks)),
       buildMetric("Выполнение", formatPercent(metrics.completion)),
-      buildMetric("Ожидание", formatKopecks(metrics.expectationKopecks)),
+      buildMetric("Жду", formatKopecks(metrics.expectationKopecks)),
     );
     card.append(header, metricsGrid, buildProgressBars(plan, metrics.factKopecks, true));
     return card;
@@ -1314,7 +1401,7 @@
     title.append(createElement("p", "summary-card__label", "День"), createElement("h2", "", capitalize(formatDate(dateKey, { day: "numeric", month: "long" }))));
     header.append(title);
     const metricsGrid = createElement("div", "finance-metrics finance-metrics--day");
-    metricsGrid.append(buildMetric("Факт", formatKopecks(metrics.factKopecks)), buildMetric("Ожидание", formatKopecks(metrics.expectationKopecks)));
+    metricsGrid.append(buildMetric("Получено", formatKopecks(metrics.factKopecks)), buildMetric("Жду", formatKopecks(metrics.expectationKopecks)));
     card.append(header, metricsGrid);
     return card;
   }
@@ -1336,42 +1423,31 @@
   }
 
   function buildAddTaskButton(dateKey, compact = false) {
-    const button = createElement("button", compact ? "day-add day-add--compact" : "button button--primary", compact ? "" : "Новая задача");
+    const button = createElement("button", compact ? "day-add day-add--compact" : "button button--primary", compact ? "" : "Добавить дело");
     button.type = "button";
     button.dataset.action = "new-task";
     button.dataset.date = dateKey;
-    button.setAttribute("aria-label", `Добавить задачу на ${formatDate(dateKey, { dateStyle: "long" })}`);
+    button.setAttribute("aria-label", `Добавить дело на ${formatDate(dateKey, { dateStyle: "long" })}`);
     if (compact) button.append(createIcon("plus"));
     return button;
   }
 
   function buildGettingStarted() {
+    if (state.tasks.length) return null;
     const actions = [];
     const selected = state.settings.selectedDate;
-    const monthKey = getMonthKey(selected);
-    if (!state.tasks.length) {
-      const taskButton = createElement("button", "button button--primary", "Добавить первую задачу");
-      taskButton.type = "button";
-      taskButton.dataset.action = "new-task";
-      taskButton.dataset.date = selected;
-      actions.push(taskButton);
-    }
-    if (!state.monthlyPlans[monthKey]) {
-      const planButton = createElement("button", "button button--secondary", "Установить план месяца");
-      planButton.type = "button";
-      planButton.dataset.action = "open-plan";
-      planButton.dataset.planType = "month";
-      actions.push(planButton);
-    }
-    if (!state.revenueEntries.some((entry) => entry.status === "expected")) {
-      const revenueButton = createElement("button", "button button--secondary", "Добавить ожидаемую оплату");
-      revenueButton.type = "button";
-      revenueButton.dataset.action = "new-revenue";
-      revenueButton.dataset.date = selected;
-      actions.push(revenueButton);
-    }
-    if (!actions.length) return null;
-    const empty = buildEmptyState("Начните с главного", "Эти подсказки исчезнут по мере заполнения планировщика.");
+    const taskButton = createElement("button", "button button--primary", "Добавить дело");
+    taskButton.type = "button";
+    taskButton.dataset.action = "new-task";
+    taskButton.dataset.date = selected;
+    actions.push(taskButton);
+    const empty = buildEmptyState("Неделя пока свободна", "Можно начать с одного дела — остальное добавится по пути.", {
+      src: "assets/illustrations/moomintroll-snorkmaiden-planner.png",
+      alt: "Муми-тролль и Фрекен Снорк планируют неделю",
+      width: 600,
+      height: 400,
+      loading: "eager",
+    });
     empty.classList.add("empty-state--getting-started");
     const actionBar = createElement("div", "empty-state__actions");
     actionBar.append(...actions);
@@ -1399,7 +1475,7 @@
     if (!mobile) {
       const list = buildTaskList(dateKey, { compact: true });
       if (list.count) day.append(list.node);
-      else day.append(createElement("p", "calendar-day__empty", "Задач пока нет"));
+      else day.classList.add("is-empty");
     }
     return day;
   }
@@ -1420,9 +1496,9 @@
     const list = buildTaskList(selected);
     if (list.count) view.append(list.node);
     else {
-      const empty = buildEmptyState("День свободен", "Добавьте первую задачу — со временем или без него.", {
+      const empty = buildEmptyState("День свободен", "Запишите одно дело — со временем или без него.", {
         src: "assets/illustrations/little-my-tasks.png",
-        alt: "Малышка Мю с блокнотом для задач",
+        alt: "Малышка Мю с блокнотом для дел",
         width: 360,
         height: 360,
       });
@@ -1459,9 +1535,9 @@
       selectedPanel.append(heading, buildDailyFinance(state.settings.selectedDate));
       const list = buildTaskList(state.settings.selectedDate);
       if (list.count) selectedPanel.append(list.node);
-      else selectedPanel.append(buildEmptyState("В выбранный день пока пусто", "Выберите другую дату или добавьте задачу.", {
+      else selectedPanel.append(buildEmptyState("На этот день ничего не записано", "Можно добавить дело или выбрать другой день.", {
         src: "assets/illustrations/little-my-tasks.png",
-        alt: "Малышка Мю с блокнотом для задач",
+        alt: "Малышка Мю с блокнотом для дел",
         width: 360,
         height: 360,
       }));
@@ -1478,9 +1554,9 @@
     if (outside) day.classList.add("is-outside");
     if (dateKey === getMoscowDateKey()) day.classList.add("is-today");
     const plannedCount = state.tasks.filter((task) => task.date === dateKey && task.status === "planned").length;
-    day.setAttribute("aria-label", `Открыть ${formatDate(dateKey, { dateStyle: "long" })}. Запланировано задач: ${plannedCount}`);
+    day.setAttribute("aria-label", `Открыть ${formatDate(dateKey, { dateStyle: "long" })}. Дел запланировано: ${plannedCount}`);
     day.append(createElement("span", "calendar-day__date", String(getDateObject(dateKey).getUTCDate())));
-    if (plannedCount) day.append(createElement("span", "month-task-count", `${plannedCount} ${plannedCount === 1 ? "задача" : "задач"}`));
+    if (plannedCount) day.append(createElement("span", "month-task-count", `Дел: ${plannedCount}`));
     day.append(buildDailyFinance(dateKey, true));
     return day;
   }
@@ -1506,7 +1582,7 @@
     setText(elements.overdueCount, overdue.length);
     elements.overdueTasks.classList.toggle("has-items", overdue.length > 0);
     if (!overdue.length) {
-      elements.overdueList.replaceChildren(createElement("p", "attention-panel__empty", "Просроченных задач нет."));
+      elements.overdueList.replaceChildren(createElement("p", "attention-panel__empty", "Просроченных дел нет."));
       return;
     }
     const list = createElement("div", "attention-list");
@@ -1532,14 +1608,14 @@
   function renderTaskTrash() {
     const items = state.trash.filter((item) => item.entityType === "task");
     if (!items.length) {
-      elements.taskTrashList.replaceChildren(createElement("p", "trash-list__empty", "Корзина задач пуста."));
+      elements.taskTrashList.replaceChildren(createElement("p", "trash-list__empty", "Корзина дел пуста."));
       return;
     }
     const fragment = document.createDocumentFragment();
     for (const item of items.sort((a, b) => b.deletedAt.localeCompare(a.deletedAt))) {
       const row = createElement("div", "trash-item");
       const text = createElement("div", "trash-item__text");
-      text.append(createElement("strong", "", item.payload.description), createElement("span", "", `Задача · ${formatDate(item.payload.date, { day: "numeric", month: "long", year: "numeric" })} · удалено ${formatDateTime(item.deletedAt)}`));
+      text.append(createElement("strong", "", item.payload.description), createElement("span", "", `Дело · ${formatDate(item.payload.date, { day: "numeric", month: "long", year: "numeric" })} · удалено ${formatDateTime(item.deletedAt)}`));
       const actions = createElement("div", "trash-item__actions");
       const restore = createElement("button", "button button--secondary", "Восстановить");
       restore.type = "button";
@@ -1591,7 +1667,7 @@
   function buildFollowUpCard(item) {
     const overdue = isFollowUpOverdue(item);
     const card = createElement("article", `follow-up-card${item.completed ? " is-completed" : ""}${overdue ? " is-overdue" : ""}`);
-    const check = createElement("input", "follow-up-card__check"); check.type = "checkbox"; check.checked = item.completed; check.dataset.action = "toggle-follow-up"; check.dataset.followUpId = item.id; check.setAttribute("aria-label", item.completed ? "Вернуть клиента в невыполненные" : "Отметить возврат выполненным");
+    const check = createElement("input", "follow-up-card__check"); check.type = "checkbox"; check.checked = item.completed; check.dataset.action = "toggle-follow-up"; check.dataset.followUpId = item.id; check.setAttribute("aria-label", item.completed ? "Вернуть запись в невыполненные" : "Отметить разговор состоявшимся");
     const body = createElement("button", "follow-up-card__body"); body.type = "button"; body.dataset.action = "edit-follow-up"; body.dataset.followUpId = item.id;
     const heading = createElement("span", "follow-up-card__heading"); heading.append(createElement("strong", "", item.name), createElement("span", "follow-up-card__date", `${formatDate(item.date, { day: "numeric", month: "long", year: "numeric" })} · ${item.time}`));
     body.append(heading);
@@ -1603,36 +1679,31 @@
     if (item.contactLabel) {
       const contact = createElement("div", "contact-control");
       const reveal = createElement("button", "contact-chip", item.contactLabel); reveal.type = "button"; reveal.dataset.action = "reveal-follow-up-contact"; reveal.dataset.followUpId = item.id; reveal.setAttribute("aria-expanded", "false"); reveal.append(createElement("span", "contact-tooltip", item.contactValue));
-      const copy = makeActionButton("Копировать контакт клиента", "copy-follow-up-contact", "", "copy"); copy.dataset.followUpId = item.id;
+      const copy = makeActionButton("Копировать контакт", "copy-follow-up-contact", "", "copy"); copy.dataset.followUpId = item.id;
       contact.append(reveal, copy); meta.append(contact);
     }
-    const remove = makeActionButton("Переместить клиента в корзину", "delete-follow-up", "", "trash", "task-action task-action--danger"); remove.dataset.followUpId = item.id;
+    const remove = makeActionButton("Переместить запись в корзину", "delete-follow-up", "", "trash", "task-action task-action--danger"); remove.dataset.followUpId = item.id;
     meta.append(remove); card.append(check, body, meta); return card;
   }
 
   function renderFollowUps() {
     elements.hideCompletedFollowUps.checked = state.settings.hideCompletedFollowUps;
+    const toolbar = elements.hideCompletedFollowUps.closest(".clients-toolbar");
+    if (toolbar) toolbar.hidden = !state.followUps.length;
     const visible = sortFollowUps(state.followUps).filter((item) => !state.settings.hideCompletedFollowUps || !item.completed);
     if (!visible.length) {
       const empty = buildEmptyState(
-        state.followUps.length ? "Выполненные скрыты" : "Список пока пуст",
-        state.followUps.length ? "Отключите переключатель, чтобы увидеть завершённые возвраты." : "Добавьте клиента и укажите точное время, когда к нему нужно вернуться.",
+        state.followUps.length ? "Выполненные скрыты" : "Здесь пока никого нет",
+        state.followUps.length ? "Отключите переключатель, чтобы увидеть завершённые записи." : "Добавьте человека, к которому важно вернуться.",
         state.followUps.length ? null : {
           src: "assets/illustrations/moominmamma-moominpappa-letter.png",
           alt: "Муми-мама и Муми-папа готовят письмо",
           width: 480,
           height: 320,
           wide: true,
+          loading: "eager",
         },
       );
-      if (!state.followUps.length) {
-        const add = createElement("button", "button button--primary", "Добавить первого клиента");
-        add.type = "button";
-        add.dataset.action = "new-follow-up";
-        const actions = createElement("div", "empty-state__actions");
-        actions.append(add);
-        empty.append(actions);
-      }
       elements.followUpList.replaceChildren(empty);
       return;
     }
@@ -1641,10 +1712,10 @@
 
   function renderFollowUpTrash() {
     const items = state.trash.filter((item) => item.entityType === "followUp").sort((a, b) => b.deletedAt.localeCompare(a.deletedAt));
-    if (!items.length) { elements.followUpTrashList.replaceChildren(createElement("p", "trash-list__empty", "Корзина клиентов пуста.")); return; }
+    if (!items.length) { elements.followUpTrashList.replaceChildren(createElement("p", "trash-list__empty", "Корзина людей пуста.")); return; }
     const fragment = document.createDocumentFragment();
     for (const item of items) {
-      const row = createElement("div", "trash-item"); const info = createElement("div", "trash-item__text"); info.append(createElement("strong", "", item.payload.name), createElement("span", "", `Клиент · ${formatDate(item.payload.date, { day: "numeric", month: "short", year: "numeric" })} · удалено ${formatDateTime(item.deletedAt)}`));
+      const row = createElement("div", "trash-item"); const info = createElement("div", "trash-item__text"); info.append(createElement("strong", "", item.payload.name), createElement("span", "", `Человек · ${formatDate(item.payload.date, { day: "numeric", month: "short", year: "numeric" })} · удалено ${formatDateTime(item.deletedAt)}`));
       const actions = createElement("div", "trash-item__actions"); const restore = createElement("button", "button button--secondary", "Восстановить"); restore.type = "button"; restore.dataset.action = "restore-follow-up"; restore.dataset.trashId = item.id; const purge = createElement("button", "button button--ghost", "Удалить навсегда"); purge.type = "button"; purge.dataset.action = "purge-follow-up"; purge.dataset.trashId = item.id; actions.append(restore, purge); row.append(info, actions); fragment.append(row);
     }
     elements.followUpTrashList.replaceChildren(fragment);
@@ -1655,20 +1726,20 @@
     const view = state.settings.calendarView;
     if (view === "day") {
       const isToday = selected === getMoscowDateKey();
-      setText(elements.plannerHeading, isToday ? "Сегодня в фокусе" : "План на день");
+      setText(elements.plannerHeading, isToday ? "Сегодня" : "Этот день");
       setText(elements.periodTitle, capitalize(formatDate(selected, { weekday: "long", day: "numeric", month: "long" })));
       setText(elements.periodCaption, formatDate(selected, { year: "numeric" }));
       renderDayView();
       return;
     }
     if (view === "month") {
-      setText(elements.plannerHeading, "Месяц целиком");
+      setText(elements.plannerHeading, "Этот месяц");
       setText(elements.periodTitle, capitalize(formatDate(selected, { month: "long", year: "numeric" })));
-      setText(elements.periodCaption, "Календарный обзор");
+      setText(elements.periodCaption, "Все дни месяца");
       renderMonthView();
       return;
     }
-    setText(elements.plannerHeading, "Ритм недели");
+    setText(elements.plannerHeading, "Эта неделя");
     setText(elements.periodTitle, formatWeekRange(selected));
     const info = getIsoWeekInfo(selected);
     setText(elements.periodCaption, `Неделя ${info.week} · понедельник — воскресенье`);
@@ -1744,16 +1815,18 @@
     form.elements.customProduct.value = task?.customProduct || "";
     form.elements.contactLabel.value = task?.contactLabel || "";
     form.elements.contactValue.value = task?.contactValue || "";
+    elements.taskContactSection.open = Boolean(task?.contactLabel || task?.contactValue);
     form.elements.status.value = task?.status || "planned";
     elements.taskStatusField.hidden = !task;
     elements.taskDelete.hidden = !task;
-    setText(document.querySelector("#task-dialog-title"), task ? "Редактировать задачу" : "Новая задача");
+    setText(document.querySelector("#task-dialog-title"), task ? "Изменить дело" : "Что хочется сделать?");
     setTaskProductVisibility();
     openDialog(elements.taskDialog, trigger);
     window.requestAnimationFrame(() => form.elements.description.focus());
   }
 
   function showTaskErrors(errors) {
+    if (errors.contactLabel || errors.contactValue) elements.taskContactSection.open = true;
     const labels = {
       description: "Описание",
       date: "Дата",
@@ -1814,7 +1887,7 @@
       } else {
         next.tasks.push({ id: createId("task"), ...result.value, createdAt: now, updatedAt: now });
       }
-    }, "Задача сохранена");
+    }, "Дело сохранено");
     closeDialog(elements.taskDialog);
   }
 
@@ -1824,7 +1897,7 @@
       if (!task || task.status === "cancelled") return;
       task.status = completed ? "completed" : "planned";
       task.updatedAt = new Date().toISOString();
-    }, completed ? "Задача выполнена" : "Задача возвращена в запланированные");
+    }, completed ? "Готово" : "Дело снова в планах");
   }
 
   function deleteTask(taskId) {
@@ -1845,7 +1918,7 @@
   function purgeTask(trashId) {
     updateState((next) => {
       next.trash = next.trash.filter((item) => item.id !== trashId);
-    }, "Задача удалена навсегда");
+    }, "Дело удалено навсегда");
   }
 
   function fallbackCopyText(value) {
@@ -1890,7 +1963,7 @@
       const moved = next.tasks.find((item) => item.id === taskId);
       moved.date = dateKey;
       moved.updatedAt = new Date().toISOString();
-    }, "Задача перенесена");
+    }, "Дело перенесено");
     return true;
   }
 
@@ -2063,22 +2136,22 @@
   function openFollowUpForm(id = null, trigger = document.activeElement) {
     const item = id ? getFollowUp(id) : null; const form = elements.followUpForm; form.reset(); clearFollowUpErrors();
     form.elements.id.value = item?.id || ""; form.elements.name.value = item?.name || ""; form.elements.date.value = item?.date || getMoscowDateKey(); form.elements.time.value = item?.time || ""; form.elements.comment.value = item?.comment || ""; form.elements.contactLabel.value = item?.contactLabel || ""; form.elements.contactValue.value = item?.contactValue || "";
-    elements.followUpDelete.hidden = !item; setText(document.querySelector("#follow-up-dialog-title"), item ? "Редактировать клиента" : "Добавить клиента"); openDialog(elements.followUpDialog, trigger); window.requestAnimationFrame(() => form.elements.name.focus());
+    elements.followUpDelete.hidden = !item; setText(document.querySelector("#follow-up-dialog-title"), item ? "Изменить запись" : "Добавить человека"); openDialog(elements.followUpDialog, trigger); window.requestAnimationFrame(() => form.elements.name.focus());
   }
   function showFollowUpErrors(errors) {
     const labels = { name: "Имя", date: "Дата", time: "Время", comment: "Комментарий", contactLabel: "Контактная метка", contactValue: "Значение контакта" }; const list = createElement("ul");
     for (const [field, message] of Object.entries(errors)) { const control = elements.followUpForm.elements[field]; const error = document.querySelector(`#follow-up-${field.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`)}-error`); setText(error, message); control?.setAttribute("aria-invalid", "true"); const item = createElement("li"); const link = createElement("a", "", `${labels[field]}: ${message}`); link.href = `#${control?.id || "follow-up-form"}`; item.append(link); list.append(item); }
-    elements.followUpErrorSummary.replaceChildren(createElement("strong", "", "Проверьте поля клиента"), list); elements.followUpErrorSummary.hidden = false; elements.followUpErrorSummary.focus();
+    elements.followUpErrorSummary.replaceChildren(createElement("strong", "", "Проверьте заполненные поля"), list); elements.followUpErrorSummary.hidden = false; elements.followUpErrorSummary.focus();
   }
   function submitFollowUpForm(event) {
     event.preventDefault(); clearFollowUpErrors(); const form = elements.followUpForm; const id = form.elements.id.value; const existing = id ? getFollowUp(id) : null; const result = validateFollowUpInput({ name: form.elements.name.value, date: form.elements.date.value, time: form.elements.time.value, comment: form.elements.comment.value, contactLabel: form.elements.contactLabel.value, contactValue: form.elements.contactValue.value });
     if (!result.ok) { showFollowUpErrors(result.errors); return; } const now = new Date().toISOString();
-    updateState((next) => { if (existing) { const index = next.followUps.findIndex((item) => item.id === id); next.followUps[index] = { ...next.followUps[index], ...result.value, updatedAt: now }; } else next.followUps.push({ id: createId("follow-up"), ...result.value, completed: false, completedAt: null, createdAt: now, updatedAt: now }); }, existing ? "Клиент сохранён" : "Клиент добавлен"); closeDialog(elements.followUpDialog);
+    updateState((next) => { if (existing) { const index = next.followUps.findIndex((item) => item.id === id); next.followUps[index] = { ...next.followUps[index], ...result.value, updatedAt: now }; } else next.followUps.push({ id: createId("follow-up"), ...result.value, completed: false, completedAt: null, createdAt: now, updatedAt: now }); }, existing ? "Запись сохранена" : "Человек добавлен"); closeDialog(elements.followUpDialog);
   }
   function toggleFollowUp(id, completed) { const now = new Date().toISOString(); updateState((next) => { const item = next.followUps.find((entry) => entry.id === id); if (!item) return; item.completed = completed; item.completedAt = completed ? now : null; item.updatedAt = now; }, completed ? "Возврат выполнен" : "Возврат снова активен"); }
   function deleteFollowUp(id) { if (!getFollowUp(id)) return; updateState((next) => { moveFollowUpToTrashState(next, id, createId("trash"), new Date().toISOString()); }, "Перемещено в корзину"); closeDialog(elements.followUpDialog); }
   function restoreFollowUp(trashId) { updateState((next) => { restoreFollowUpFromTrashState(next, trashId, createId("follow-up")); }, "Запись восстановлена"); }
-  function purgeFollowUp(trashId) { updateState((next) => { next.trash = next.trash.filter((item) => item.id !== trashId); }, "Клиент удалён навсегда"); }
+  function purgeFollowUp(trashId) { updateState((next) => { next.trash = next.trash.filter((item) => item.id !== trashId); }, "Запись удалена навсегда"); }
   async function copyFollowUpContact(id) { const item = getFollowUp(id); if (!item?.contactValue) return; const copied = await copyText(item.contactValue); showToast(copied ? "Контакт скопирован" : "Не удалось скопировать контакт"); }
 
   function clearPlanErrors() {
@@ -2223,7 +2296,7 @@
   function showDataConfirmation(kind, importedState = null, trigger = document.activeElement) {
     pendingDataOperation = kind; pendingImportedState = importedState; elements.dataOperationError.hidden = true; elements.continueWithoutBackup.hidden = true;
     setText(elements.dataConfirmTitle, kind === "import" ? "Заменить все данные?" : "Удалить все данные?");
-    setText(elements.dataConfirmMessage, kind === "import" ? "Текущие данные будут заменены содержимым выбранной копии. Перед заменой приложение скачает текущую копию." : "Все задачи, оплаты, клиенты, планы и корзина будут удалены. Перед очисткой приложение скачает текущую копию.");
+    setText(elements.dataConfirmMessage, kind === "import" ? "Текущие данные будут заменены содержимым выбранной копии. Перед заменой приложение скачает текущую копию." : "Все дела, оплаты, люди, планы и корзина будут удалены. Перед очисткой приложение скачает текущую копию.");
     openDialog(elements.dataConfirmDialog, trigger);
   }
 
@@ -2321,7 +2394,7 @@
           actionButton.setAttribute("aria-expanded", String(expanded));
         }
         if (action === "restore-task") restoreTask(trashId);
-        if (action === "purge-task" && window.confirm("Удалить эту задачу навсегда?")) purgeTask(trashId);
+        if (action === "purge-task" && window.confirm("Удалить это дело навсегда?")) purgeTask(trashId);
         if (action === "new-revenue") openRevenueForm(date || state.settings.selectedDate, null, actionButton);
         if (action === "edit-revenue") openRevenueForm(undefined, revenueId, actionButton);
         if (action === "delete-revenue") deleteRevenue(revenueId);
@@ -2337,7 +2410,7 @@
           document.querySelectorAll(".contact-chip[aria-expanded='true']").forEach((button) => button.setAttribute("aria-expanded", "false")); actionButton.setAttribute("aria-expanded", String(expanded));
         }
         if (action === "restore-follow-up") restoreFollowUp(trashId);
-        if (action === "purge-follow-up" && window.confirm("Удалить этого клиента навсегда?")) purgeFollowUp(trashId);
+        if (action === "purge-follow-up" && window.confirm("Удалить этого человека навсегда?")) purgeFollowUp(trashId);
         if (action === "open-plan") openPlanForm(planType, actionButton);
         if (action === "open-selected-day") {
           updateState((next) => {
@@ -2523,6 +2596,7 @@
     });
     const refreshTimeSensitiveUi = () => {
       render();
+      syncCornerQuote();
     };
     window.addEventListener("focus", refreshTimeSensitiveUi);
     document.addEventListener("visibilitychange", () => {
@@ -2536,6 +2610,8 @@
     bindEvents();
     loadInitialState();
     render();
+    loadQuoteRotationState();
+    syncCornerQuote();
   }
 
   if (document.readyState === "loading") {

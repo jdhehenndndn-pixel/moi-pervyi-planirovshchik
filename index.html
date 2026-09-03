@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Тихий темп — локальный планировщик задач, клиентов и выручки."
+      content="Мой уголок для планов — личный планировщик дел, людей и денег."
     />
     <link rel="icon" href="data:," />
-    <title>Тихий темп</title>
+    <title>Мой уголок для планов</title>
     <link rel="stylesheet" href="style.css" />
     <script src="script.js" defer></script>
   </head>
@@ -17,36 +17,21 @@
 
     <div class="app-shell">
       <header class="app-header">
-        <div class="brand" aria-label="Тихий темп">
-          <span class="brand__mark" aria-hidden="true">
-            <svg viewBox="0 0 32 32" role="img">
-              <path d="M5 22c4-9 9-13 13-13 4 0 7 3 9 8-6-2-11 0-14 6-3 0-6 0-8-1Z" />
-              <path d="M9 11c2 2 3 5 3 8M21 7c-1 3-1 6 1 9" />
-            </svg>
-          </span>
+        <div class="brand" aria-label="Мой уголок для планов">
           <span>
-            <span class="brand__eyebrow">Личный ритм работы</span>
-            <span class="brand__name">Тихий темп</span>
+            <span class="brand__name">Мой уголок для планов</span>
+            <span class="brand__eyebrow">Чтобы важное не потерялось</span>
           </span>
         </div>
 
         <nav class="section-nav" aria-label="Основные разделы">
           <button class="section-nav__button is-active" type="button" data-section="planner">
-            Планировщик
+            Планы
           </button>
           <button class="section-nav__button" type="button" data-section="clients">
-            Клиенты
+            Люди
           </button>
         </nav>
-
-        <img
-          class="app-header__illustration"
-          src="assets/illustrations/moomintroll-snorkmaiden-planner.png"
-          width="600"
-          height="400"
-          alt=""
-          aria-hidden="true"
-        />
 
         <button
           class="icon-button header-settings"
@@ -94,10 +79,21 @@
 
       <main id="main-content" tabindex="-1">
         <section id="planner-section" aria-labelledby="planner-heading">
+          <img
+            class="planner-section__botanical"
+            src="assets/illustrations/botanical-motif.png"
+            alt=""
+            width="320"
+            height="480"
+            loading="lazy"
+            decoding="async"
+            aria-hidden="true"
+          />
           <div class="workspace-heading workspace-heading--planner">
             <div class="workspace-heading__title">
-              <p class="workspace-heading__kicker">Планировщик</p>
-              <h1 id="planner-heading">Ритм недели</h1>
+              <p class="workspace-heading__kicker">Мои планы</p>
+              <h1 id="planner-heading">Эта неделя</h1>
+              <p class="workspace-heading__description">Дела, встречи и всё, что хочется не забыть.</p>
             </div>
             <div class="view-switcher" role="group" aria-label="Масштаб календаря">
               <button type="button" data-view="day">День</button>
@@ -106,10 +102,10 @@
             </div>
             <div class="workspace-heading__actions">
               <button class="button button--secondary" id="new-revenue-button" type="button">
-                Добавить оплату
+                Записать оплату
               </button>
               <button class="button button--primary" id="new-task-button" type="button">
-                Новая задача
+                Добавить дело
               </button>
             </div>
           </div>
@@ -131,55 +127,67 @@
           <div class="attention-grid">
             <details class="attention-panel" id="overdue-tasks">
               <summary>
-                <span>Просроченные задачи</span>
+                <span>Дела, которые ждут внимания</span>
                 <span class="count-badge" id="overdue-count">0</span>
               </summary>
               <div class="attention-panel__content" id="overdue-list"></div>
             </details>
             <details class="attention-panel" id="overdue-revenue">
               <summary>
-                <span>Просроченные ожидания</span>
+                <span>Оплаты, которые я жду</span>
                 <span class="count-badge" id="overdue-revenue-count">0</span>
               </summary>
               <div class="attention-panel__content" id="overdue-revenue-list"></div>
             </details>
           </div>
 
-          <div class="summary-grid" id="financial-summary" aria-label="Финансовая сводка" aria-live="polite"></div>
+          <section class="planner-surface" id="planner-surface" aria-live="polite"></section>
+
+          <figure class="corner-quote">
+            <span class="visually-hidden">Цитата из Муми-троллей меняется каждые пять часов.</span>
+            <blockquote id="corner-quote-text">«Скоро мы будем на месте».</blockquote>
+            <figcaption id="corner-quote-source">Муми-мама · «Муми-папа и море»</figcaption>
+          </figure>
 
           <div class="nature-divider" aria-hidden="true">
-            <img src="assets/illustrations/shoreline-motif.png" width="600" height="400" alt="" />
+            <img
+              src="assets/illustrations/shoreline-motif.png"
+              alt=""
+              width="600"
+              height="400"
+              loading="lazy"
+              decoding="async"
+            />
           </div>
 
-          <section class="planner-surface" id="planner-surface" aria-live="polite"></section>
-          <img
-            class="planner-section__botanical"
-            src="assets/illustrations/botanical-motif.png"
-            width="320"
-            height="480"
-            alt=""
-            aria-hidden="true"
-            loading="lazy"
-          />
+          <section class="money-section" aria-labelledby="money-heading">
+            <div class="content-section-heading">
+              <p class="workspace-heading__kicker">Деньги</p>
+              <h2 id="money-heading">Планы и оплаты</h2>
+            </div>
+            <div class="summary-grid" id="financial-summary" aria-label="Финансовая сводка" aria-live="polite"></div>
+          </section>
         </section>
 
         <section id="clients-section" aria-labelledby="clients-heading" hidden>
           <img
             class="clients-section__motif"
             src="assets/illustrations/clouds-moon-motif.png"
+            alt=""
             width="480"
             height="320"
-            alt=""
+            loading="lazy"
+            decoding="async"
             aria-hidden="true"
           />
           <div class="workspace-heading workspace-heading--clients">
             <div>
-              <p class="workspace-heading__kicker">Возвраты к клиентам</p>
-              <h1 id="clients-heading">Клиенты</h1>
-              <p class="workspace-heading__description">Кому нужно написать</p>
+              <p class="workspace-heading__kicker">Люди</p>
+              <h1 id="clients-heading">Кому я хочу написать</h1>
+              <p class="workspace-heading__description">Чтобы обещания и тёплые разговоры не терялись в делах.</p>
             </div>
             <button class="button button--primary" id="new-follow-up-button" type="button">
-              Добавить клиента
+              Добавить человека
             </button>
           </div>
           <div class="clients-toolbar">
@@ -230,8 +238,8 @@
         </div>
         <div class="settings-block">
           <div>
-            <strong>Корзина задач</strong>
-            <p>Задачу можно восстановить или удалить окончательно.</p>
+            <strong>Корзина дел</strong>
+            <p>Дело можно восстановить или удалить окончательно.</p>
           </div>
           <div class="trash-list" id="task-trash-list"></div>
         </div>
@@ -244,8 +252,8 @@
         </div>
         <div class="settings-block">
           <div>
-            <strong>Корзина клиентов</strong>
-            <p>Возврат можно восстановить или удалить окончательно.</p>
+            <strong>Корзина людей</strong>
+            <p>Запись можно восстановить или удалить окончательно.</p>
           </div>
           <div class="trash-list" id="follow-up-trash-list"></div>
         </div>
@@ -269,21 +277,21 @@
     <dialog class="dialog" id="follow-up-dialog" aria-labelledby="follow-up-dialog-title">
       <form id="follow-up-form" novalidate>
         <div class="dialog__header">
-          <div><p class="dialog__kicker">Возврат к клиенту</p><h2 id="follow-up-dialog-title">Добавить клиента</h2></div>
-          <button class="icon-button" id="follow-up-close" type="button" aria-label="Закрыть форму клиента"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+          <div><p class="dialog__kicker">Не забыть написать</p><h2 id="follow-up-dialog-title">Добавить человека</h2></div>
+          <button class="icon-button" id="follow-up-close" type="button" aria-label="Закрыть форму"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
         </div>
         <div class="dialog__body">
           <div class="form-error-summary" id="follow-up-error-summary" role="alert" tabindex="-1" hidden></div>
           <input name="id" type="hidden" />
           <div class="form-grid">
-            <div class="field field--wide"><label for="follow-up-name">Имя или обозначение <span aria-hidden="true">*</span></label><input id="follow-up-name" name="name" type="text" maxlength="120" aria-describedby="follow-up-name-error" /><span class="field__error" id="follow-up-name-error"></span></div>
+            <div class="field field--wide"><label for="follow-up-name">Имя <span aria-hidden="true">*</span></label><input id="follow-up-name" name="name" type="text" maxlength="120" aria-describedby="follow-up-name-error" /><span class="field__error" id="follow-up-name-error"></span></div>
             <div class="field"><label for="follow-up-date">Дата <span aria-hidden="true">*</span></label><input id="follow-up-date" name="date" type="date" aria-describedby="follow-up-date-error" /><span class="field__error" id="follow-up-date-error"></span></div>
             <div class="field"><label for="follow-up-time">Время <span aria-hidden="true">*</span></label><input id="follow-up-time" name="time" type="time" aria-describedby="follow-up-time-error" /><span class="field__error" id="follow-up-time-error"></span></div>
             <div class="field field--wide"><label for="follow-up-comment">Комментарий</label><textarea id="follow-up-comment" name="comment" rows="4" maxlength="1000" aria-describedby="follow-up-comment-error"></textarea><span class="field__error" id="follow-up-comment-error"></span></div>
             <div class="field"><label for="follow-up-contact-label">Контактная метка</label><input id="follow-up-contact-label" name="contactLabel" type="text" maxlength="50" placeholder="Например, Telegram" aria-describedby="follow-up-contact-label-error" /><span class="field__error" id="follow-up-contact-label-error"></span></div>
             <div class="field"><label for="follow-up-contact-value">Значение контакта</label><input id="follow-up-contact-value" name="contactValue" type="text" maxlength="500" placeholder="Например, @contact" aria-describedby="follow-up-contact-value-error" /><span class="field__error" id="follow-up-contact-value-error"></span></div>
           </div>
-          <div class="dialog__actions dialog__actions--split"><button class="button button--danger" id="follow-up-delete" type="button" hidden>Удалить</button><span class="dialog__actions-spacer"></span><button class="button button--ghost" id="follow-up-cancel" type="button">Отмена</button><button class="button button--primary" type="submit">Сохранить клиента</button></div>
+          <div class="dialog__actions dialog__actions--split"><button class="button button--danger" id="follow-up-delete" type="button" hidden>Удалить</button><span class="dialog__actions-spacer"></span><button class="button button--ghost" id="follow-up-cancel" type="button">Отмена</button><button class="button button--primary" type="submit">Сохранить</button></div>
         </div>
       </form>
     </dialog>
@@ -297,10 +305,10 @@
       <form id="task-form" novalidate>
         <div class="dialog__header">
           <div>
-            <p class="dialog__kicker">Планировщик</p>
-            <h2 id="task-dialog-title">Новая задача</h2>
+            <p class="dialog__kicker">Новое дело</p>
+            <h2 id="task-dialog-title">Что хочется сделать?</h2>
           </div>
-          <button class="icon-button" id="task-close" type="button" aria-label="Закрыть форму задачи">
+          <button class="icon-button" id="task-close" type="button" aria-label="Закрыть форму">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         </div>
@@ -309,9 +317,8 @@
           <input id="task-id" name="id" type="hidden" />
 
           <div class="field field--wide">
-            <label for="task-description">Описание <span aria-hidden="true">*</span></label>
-            <textarea id="task-description" name="description" rows="4" maxlength="500" required aria-describedby="task-description-error"></textarea>
-            <span class="field__hint">До 500 символов</span>
+            <label for="task-description">Что нужно сделать <span aria-hidden="true">*</span></label>
+            <textarea id="task-description" name="description" rows="3" maxlength="500" required aria-describedby="task-description-error"></textarea>
             <span class="field__error" id="task-description-error"></span>
           </div>
 
@@ -324,7 +331,7 @@
             <div class="field">
               <label for="task-time">Время</label>
               <input id="task-time" name="time" type="time" aria-describedby="task-time-hint task-time-error" />
-              <span class="field__hint" id="task-time-hint">Оставьте пустым для блока «Без времени»</span>
+              <span class="field__hint" id="task-time-hint">Можно оставить пустым</span>
               <span class="field__error" id="task-time-error"></span>
             </div>
             <div class="field">
@@ -339,7 +346,7 @@
             <div class="field">
               <label for="task-product">Продукт <span aria-hidden="true">*</span></label>
               <select id="task-product" name="product" required aria-describedby="task-product-error">
-                <option value="">Выберите продукт</option>
+                <option value="">Выберите</option>
                 <option value="vibeCoding">Вайб-кодинг</option>
                 <option value="aiSkills">ИИ-навыки</option>
                 <option value="other">Другое</option>
@@ -353,22 +360,25 @@
             </div>
           </div>
 
-          <fieldset class="field-group">
-            <legend>Контактная метка</legend>
-            <p class="field__hint">Заполните оба поля или оставьте оба пустыми.</p>
-            <div class="form-grid">
-              <div class="field">
-                <label for="task-contact-label">Короткая метка</label>
-                <input id="task-contact-label" name="contactLabel" type="text" maxlength="50" placeholder="Например, Telegram" aria-describedby="task-contact-label-error" />
-                <span class="field__error" id="task-contact-label-error"></span>
+          <details class="optional-section" id="task-contact-section">
+            <summary>Добавить контакт</summary>
+            <fieldset class="field-group">
+              <legend class="visually-hidden">Контакт для быстрого доступа</legend>
+              <p class="field__hint">Заполните оба поля или оставьте оба пустыми.</p>
+              <div class="form-grid">
+                <div class="field">
+                  <label for="task-contact-label">Где написать</label>
+                  <input id="task-contact-label" name="contactLabel" type="text" maxlength="50" placeholder="Например, Telegram" aria-describedby="task-contact-label-error" />
+                  <span class="field__error" id="task-contact-label-error"></span>
+                </div>
+                <div class="field">
+                  <label for="task-contact-value">Контакт</label>
+                  <input id="task-contact-value" name="contactValue" type="text" maxlength="500" placeholder="Например, @contact" aria-describedby="task-contact-value-error" />
+                  <span class="field__error" id="task-contact-value-error"></span>
+                </div>
               </div>
-              <div class="field">
-                <label for="task-contact-value">Значение</label>
-                <input id="task-contact-value" name="contactValue" type="text" maxlength="500" placeholder="Например, @contact" aria-describedby="task-contact-value-error" />
-                <span class="field__error" id="task-contact-value-error"></span>
-              </div>
-            </div>
-          </fieldset>
+            </fieldset>
+          </details>
 
           <div class="field" id="task-status-field" hidden>
             <label for="task-status">Статус</label>
@@ -383,7 +393,7 @@
             <button class="button button--danger" id="task-delete" type="button" hidden>Удалить</button>
             <span class="dialog__actions-spacer"></span>
             <button class="button button--ghost" id="task-cancel" type="button">Отмена</button>
-            <button class="button button--primary" type="submit">Сохранить задачу</button>
+            <button class="button button--primary" type="submit">Сохранить</button>
           </div>
         </div>
       </form>
@@ -422,7 +432,7 @@
             <div class="field">
               <label for="revenue-product">Продукт <span aria-hidden="true">*</span></label>
               <select id="revenue-product" name="product" aria-describedby="revenue-product-error">
-                <option value="">Выберите продукт</option>
+                <option value="">Выберите</option>
                 <option value="vibeCoding">Вайб-кодинг</option>
                 <option value="aiSkills">ИИ-навыки</option>
                 <option value="other">Другое</option>
@@ -468,7 +478,7 @@
       <form id="plan-form" novalidate>
         <div class="dialog__header">
           <div>
-            <p class="dialog__kicker">Финансовый ориентир</p>
+            <p class="dialog__kicker">План по деньгам</p>
             <h2 id="plan-dialog-title">Задать план</h2>
           </div>
           <button class="icon-button" id="plan-close" type="button" aria-label="Закрыть форму плана">
