@@ -287,14 +287,15 @@
   }
 
   function inspectStoredState(storage) {
+    let raw = null;
     try {
-      const raw = storage.getItem(STORAGE_KEY);
+      raw = storage.getItem(STORAGE_KEY);
       if (raw === null) return { status: "missing", raw: null, state: null };
       const parsed = JSON.parse(raw);
       if (!isValidAppState(parsed)) return { status: "invalid", raw, state: null };
       return { status: "valid", raw, state: parsed };
     } catch (error) {
-      return { status: "error", raw: null, state: null, error };
+      return { status: "error", raw, state: null, error };
     }
   }
 
@@ -2148,9 +2149,23 @@
   }
 
   function clearAllData() {
+    const previous = state;
     const initial = createInitialState();
-    try { getBrowserStorage().setItem(STORAGE_KEY, JSON.stringify(initial)); state = initial; baseRevision = 0; setDirty(false); hideConflict(); pendingDataOperation = null; closeDialog(elements.dataConfirmDialog); document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close()); render(); showToast("Все данные удалены"); return true; }
-    catch (error) { setDirty(true, "Не удалось очистить данные в хранилище."); showToast("Очистка не выполнена"); return false; }
+    initial.revision = baseRevision;
+    state = initial;
+    const saved = saveCurrentState();
+    if (!saved) {
+      state = previous;
+      render();
+      showToast("Очистка не выполнена: данные изменились или хранилище недоступно");
+      return false;
+    }
+    pendingDataOperation = null;
+    closeDialog(elements.dataConfirmDialog);
+    document.querySelectorAll("dialog[open]").forEach((dialog) => dialog.close());
+    render();
+    showToast("Все данные удалены");
+    return true;
   }
 
   function executePendingDataOperation({ withoutBackup = false } = {}) {
