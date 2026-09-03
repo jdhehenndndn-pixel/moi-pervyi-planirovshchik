@@ -1634,7 +1634,7 @@
       renderMonthView();
       return;
     }
-    setText(elements.plannerHeading, "Неделя в спокойном ритме");
+    setText(elements.plannerHeading, "Ритм недели");
     setText(elements.periodTitle, formatWeekRange(selected));
     const info = getIsoWeekInfo(selected);
     setText(elements.periodCaption, `Неделя ${info.week} · понедельник — воскресенье`);

@@ -322,6 +322,27 @@ main {
   color: var(--color-muted);
 }
 
+@media (min-width: 960px) {
+  .workspace-heading--planner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: end;
+  }
+
+  .workspace-heading--planner .workspace-heading__title {
+    min-width: 0;
+    min-height: 5.25rem;
+  }
+
+  .workspace-heading--planner .view-switcher {
+    justify-self: center;
+  }
+
+  .workspace-heading--planner .workspace-heading__actions {
+    justify-self: end;
+  }
+}
+
 h1,
 h2,
 p {
