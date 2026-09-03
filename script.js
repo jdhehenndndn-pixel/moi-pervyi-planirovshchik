@@ -1003,12 +1003,26 @@
     })}`;
   }
 
-  function buildEmptyState(title, description) {
+  function buildEmptyState(title, description, illustration = null) {
     const container = createElement("div", "empty-state");
-    const symbol = createElement("span", "empty-state__symbol");
-    symbol.setAttribute("aria-hidden", "true");
-    symbol.append(createIcon("leaf"));
-    container.append(symbol, createElement("h2", "", title), createElement("p", "", description));
+    if (illustration) {
+      const image = document.createElement("img");
+      image.className = `empty-state__illustration${illustration.wide ? " empty-state__illustration--wide" : ""}`;
+      image.src = illustration.src;
+      image.alt = illustration.alt;
+      image.width = illustration.width;
+      image.height = illustration.height;
+      image.loading = "lazy";
+      image.decoding = "async";
+      container.classList.add("empty-state--illustrated");
+      container.append(image);
+    } else {
+      const symbol = createElement("span", "empty-state__symbol");
+      symbol.setAttribute("aria-hidden", "true");
+      symbol.append(createIcon("leaf"));
+      container.append(symbol);
+    }
+    container.append(createElement("h2", "", title), createElement("p", "", description));
     return container;
   }
 
@@ -1406,7 +1420,12 @@
     const list = buildTaskList(selected);
     if (list.count) view.append(list.node);
     else {
-      const empty = buildEmptyState("День свободен", "Добавьте первую задачу — со временем или без него.");
+      const empty = buildEmptyState("День свободен", "Добавьте первую задачу — со временем или без него.", {
+        src: "assets/illustrations/little-my-tasks.png",
+        alt: "Малышка Мю с блокнотом для задач",
+        width: 360,
+        height: 360,
+      });
       empty.append(buildAddTaskButton(selected));
       view.append(empty);
     }
@@ -1440,7 +1459,12 @@
       selectedPanel.append(heading, buildDailyFinance(state.settings.selectedDate));
       const list = buildTaskList(state.settings.selectedDate);
       if (list.count) selectedPanel.append(list.node);
-      else selectedPanel.append(buildEmptyState("В выбранный день пока пусто", "Выберите другую дату или добавьте задачу."));
+      else selectedPanel.append(buildEmptyState("В выбранный день пока пусто", "Выберите другую дату или добавьте задачу.", {
+        src: "assets/illustrations/little-my-tasks.png",
+        alt: "Малышка Мю с блокнотом для задач",
+        width: 360,
+        height: 360,
+      }));
       children.push(selectedPanel);
     }
     elements.plannerSurface.replaceChildren(...children);
@@ -1590,7 +1614,17 @@
     elements.hideCompletedFollowUps.checked = state.settings.hideCompletedFollowUps;
     const visible = sortFollowUps(state.followUps).filter((item) => !state.settings.hideCompletedFollowUps || !item.completed);
     if (!visible.length) {
-      const empty = buildEmptyState(state.followUps.length ? "Выполненные скрыты" : "Список пока пуст", state.followUps.length ? "Отключите переключатель, чтобы увидеть завершённые возвраты." : "Добавьте клиента и укажите точное время, когда к нему нужно вернуться.");
+      const empty = buildEmptyState(
+        state.followUps.length ? "Выполненные скрыты" : "Список пока пуст",
+        state.followUps.length ? "Отключите переключатель, чтобы увидеть завершённые возвраты." : "Добавьте клиента и укажите точное время, когда к нему нужно вернуться.",
+        state.followUps.length ? null : {
+          src: "assets/illustrations/moominmamma-moominpappa-letter.png",
+          alt: "Муми-мама и Муми-папа готовят письмо",
+          width: 480,
+          height: 320,
+          wide: true,
+        },
+      );
       if (!state.followUps.length) {
         const add = createElement("button", "button button--primary", "Добавить первого клиента");
         add.type = "button";
