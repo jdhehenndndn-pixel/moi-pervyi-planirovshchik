@@ -1239,6 +1239,22 @@ h2 {
   margin: 8px 0 0;
 }
 
+.empty-state--getting-started {
+  min-height: 0;
+  margin-bottom: 16px;
+  border: 1px solid rgb(73 103 117 / 0.2);
+  border-radius: var(--radius-panel);
+  background: rgb(255 253 247 / 0.68);
+}
+
+.empty-state__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
 .system-banner {
   display: flex;
   align-items: center;

@@ -1137,7 +1137,7 @@
     return sortRevenueEntries(state.revenueEntries.filter((entry) => getRevenueRelevantDate(entry) === dateKey));
   }
 
-  function buildRevenueCard(entry, { showDate = false } = {}) {
+  function buildRevenueCard(entry) {
     const card = createElement("article", `revenue-entry revenue-entry--${entry.status}`);
     const body = createElement("button", "revenue-entry__body");
     body.type = "button";
@@ -1151,7 +1151,7 @@
     const meta = createElement("span", "revenue-entry__meta");
     meta.append(createElement("span", "product-label", revenueProductLabel(entry)));
     const relevantDate = getRevenueRelevantDate(entry);
-    if (showDate && relevantDate) meta.append(createElement("span", "revenue-entry__date", formatDate(relevantDate, { day: "numeric", month: "short" })));
+    if (relevantDate) meta.append(createElement("span", "revenue-entry__date", formatDate(relevantDate, { day: "numeric", month: "short" })));
     body.append(heading, meta);
     if (entry.comment) {
       const comment = createElement("span", "revenue-entry__comment", entry.comment);
@@ -1236,7 +1236,8 @@
   }
 
   function buildPlanButton(type, exists) {
-    const button = createElement("button", "button button--secondary", exists ? "Изменить план" : "Задать план");
+    const emptyLabel = type === "month" ? "Установить план месяца" : "Задать план недели";
+    const button = createElement("button", "button button--secondary", exists ? "Изменить план" : emptyLabel);
     button.type = "button";
     button.dataset.action = "open-plan";
     button.dataset.planType = type;
@@ -1259,9 +1260,11 @@
       buildMetric("Факт", formatKopecks(metrics.factKopecks)),
       buildMetric("Выполнение", formatPercent(metrics.completion)),
     );
-    if (metrics.isCurrentMonth) {
-      metricsGrid.append(buildMetric("Ранрейт", formatKopecks(metrics.runRateKopecks), "По календарным дням"));
-    }
+    metricsGrid.append(
+      metrics.isCurrentMonth
+        ? buildMetric("Ранрейт", formatKopecks(metrics.runRateKopecks), "По календарным дням")
+        : buildMetric("Ранрейт", "—", "Только для текущего месяца"),
+    );
     metricsGrid.append(buildMetric("Ожидание", formatKopecks(metrics.expectationKopecks)));
     card.append(header, metricsGrid, buildProgressBars(plan, metrics.factKopecks));
     return card;
@@ -1332,6 +1335,40 @@
     return button;
   }
 
+  function buildGettingStarted() {
+    const actions = [];
+    const selected = state.settings.selectedDate;
+    const monthKey = getMonthKey(selected);
+    if (!state.tasks.length) {
+      const taskButton = createElement("button", "button button--primary", "Добавить первую задачу");
+      taskButton.type = "button";
+      taskButton.dataset.action = "new-task";
+      taskButton.dataset.date = selected;
+      actions.push(taskButton);
+    }
+    if (!state.monthlyPlans[monthKey]) {
+      const planButton = createElement("button", "button button--secondary", "Установить план месяца");
+      planButton.type = "button";
+      planButton.dataset.action = "open-plan";
+      planButton.dataset.planType = "month";
+      actions.push(planButton);
+    }
+    if (!state.revenueEntries.some((entry) => entry.status === "expected")) {
+      const revenueButton = createElement("button", "button button--secondary", "Добавить ожидаемую оплату");
+      revenueButton.type = "button";
+      revenueButton.dataset.action = "new-revenue";
+      revenueButton.dataset.date = selected;
+      actions.push(revenueButton);
+    }
+    if (!actions.length) return null;
+    const empty = buildEmptyState("Начните с главного", "Эти подсказки исчезнут по мере заполнения планировщика.");
+    empty.classList.add("empty-state--getting-started");
+    const actionBar = createElement("div", "empty-state__actions");
+    actionBar.append(...actions);
+    empty.append(actionBar);
+    return empty;
+  }
+
   function buildWeekDay(dateKey, index, mobile) {
     const day = createElement("article", "calendar-day calendar-day--week");
     day.dataset.dropDate = dateKey;
@@ -1391,7 +1428,10 @@
     const mobile = window.matchMedia("(max-width: 959px)").matches;
     const grid = createElement("div", "calendar-grid calendar-grid--week");
     for (let index = 0; index < 7; index += 1) grid.append(buildWeekDay(addDays(start, index), index, mobile));
-    const children = [grid];
+    const children = [];
+    const gettingStarted = buildGettingStarted();
+    if (gettingStarted) children.push(gettingStarted);
+    children.push(grid);
     if (mobile) {
       const selectedPanel = createElement("section", "mobile-selected-day");
       const heading = createElement("div", "day-view__heading");
@@ -1469,7 +1509,7 @@
       return;
     }
     const list = createElement("div", "attention-list");
-    for (const entry of overdue) list.append(buildRevenueCard(entry, { showDate: true }));
+    for (const entry of overdue) list.append(buildRevenueCard(entry));
     elements.overdueRevenueList.replaceChildren(list);
   }
 
@@ -1558,7 +1598,16 @@
     elements.hideCompletedFollowUps.checked = state.settings.hideCompletedFollowUps;
     const visible = sortFollowUps(state.followUps).filter((item) => !state.settings.hideCompletedFollowUps || !item.completed);
     if (!visible.length) {
-      elements.followUpList.replaceChildren(buildEmptyState(state.followUps.length ? "Выполненные скрыты" : "Список пока пуст", state.followUps.length ? "Отключите переключатель, чтобы увидеть завершённые возвраты." : "Добавьте клиента и укажите точное время, когда к нему нужно вернуться."));
+      const empty = buildEmptyState(state.followUps.length ? "Выполненные скрыты" : "Список пока пуст", state.followUps.length ? "Отключите переключатель, чтобы увидеть завершённые возвраты." : "Добавьте клиента и укажите точное время, когда к нему нужно вернуться.");
+      if (!state.followUps.length) {
+        const add = createElement("button", "button button--primary", "Добавить первого клиента");
+        add.type = "button";
+        add.dataset.action = "new-follow-up";
+        const actions = createElement("div", "empty-state__actions");
+        actions.append(add);
+        empty.append(actions);
+      }
+      elements.followUpList.replaceChildren(empty);
       return;
     }
     const fragment = document.createDocumentFragment(); for (const item of visible) fragment.append(buildFollowUpCard(item)); elements.followUpList.replaceChildren(fragment);
@@ -1773,28 +1822,39 @@
     }, "Задача удалена навсегда");
   }
 
-  async function copyTaskContact(taskId) {
-    const task = getTask(taskId);
-    if (!task?.contactValue) return;
+  function fallbackCopyText(value) {
+    let area = null;
     try {
-      await navigator.clipboard.writeText(task.contactValue);
-      showToast("Контакт скопирован");
-    } catch (error) {
-      const area = createElement("textarea");
-      area.value = task.contactValue;
+      if (typeof document.execCommand !== "function") return false;
+      area = createElement("textarea");
+      area.value = value;
       area.setAttribute("readonly", "");
       area.className = "clipboard-helper";
       document.body.append(area);
       area.select();
-      const copied = document.execCommand("copy");
-      area.remove();
-      showToast(copied ? "Контакт скопирован" : "Не удалось скопировать контакт");
+      return Boolean(document.execCommand("copy"));
+    } catch (error) {
+      return false;
+    } finally {
+      area?.remove();
     }
   }
 
   async function copyText(value) {
-    try { await navigator.clipboard.writeText(value); return true; }
-    catch (error) { const area = createElement("textarea"); area.value = value; area.setAttribute("readonly", ""); area.className = "clipboard-helper"; document.body.append(area); area.select(); const copied = document.execCommand("copy"); area.remove(); return copied; }
+    try {
+      if (!navigator.clipboard?.writeText) return fallbackCopyText(value);
+      await navigator.clipboard.writeText(value);
+      return true;
+    } catch (error) {
+      return fallbackCopyText(value);
+    }
+  }
+
+  async function copyTaskContact(taskId) {
+    const task = getTask(taskId);
+    if (!task?.contactValue) return;
+    const copied = await copyText(task.contactValue);
+    showToast(copied ? "Контакт скопирован" : "Не удалось скопировать контакт");
   }
 
   function moveTaskToDate(taskId, dateKey) {
@@ -2242,6 +2302,7 @@
         if (action === "restore-revenue") restoreRevenue(trashId);
         if (action === "purge-revenue" && window.confirm("Удалить эту оплату навсегда?")) purgeRevenue(trashId);
         if (action === "edit-follow-up") openFollowUpForm(followUpId, actionButton);
+        if (action === "new-follow-up") openFollowUpForm(null, actionButton);
         if (action === "toggle-follow-up") toggleFollowUp(followUpId, actionButton.checked);
         if (action === "delete-follow-up") deleteFollowUp(followUpId);
         if (action === "copy-follow-up-contact") copyFollowUpContact(followUpId);
@@ -2383,8 +2444,14 @@
       showToast(started ? "Скачивание повреждённых данных начато" : "Не удалось подготовить файл");
     });
     document.querySelector("#start-fresh-button").addEventListener("click", startFreshAfterCorruption);
+    document.querySelector("#recovery-close").addEventListener("click", () => {
+      closeDialog(elements.recoveryDialog);
+      showToast("Повреждённые данные сохранены; приложение работает только в памяти");
+    });
 
-    elements.recoveryDialog.addEventListener("cancel", (event) => event.preventDefault());
+    elements.recoveryDialog.addEventListener("cancel", () => {
+      showToast("Повреждённые данные сохранены; приложение работает только в памяти");
+    });
     document.querySelectorAll("dialog").forEach((dialog) => dialog.addEventListener("keydown", trapDialogFocus));
     elements.settingsDialog.addEventListener("close", restoreDialogFocus);
     elements.taskDialog.addEventListener("close", restoreDialogFocus);
