@@ -1298,11 +1298,7 @@
     const header = createElement("div", "summary-card__header");
     const title = createElement("div");
     title.append(createElement("p", "summary-card__label", "День"), createElement("h2", "", capitalize(formatDate(dateKey, { day: "numeric", month: "long" }))));
-    const add = createElement("button", "button button--secondary", "Добавить оплату");
-    add.type = "button";
-    add.dataset.action = "new-revenue";
-    add.dataset.date = dateKey;
-    header.append(title, add);
+    header.append(title);
     const metricsGrid = createElement("div", "finance-metrics finance-metrics--day");
     metricsGrid.append(buildMetric("Факт", formatKopecks(metrics.factKopecks)), buildMetric("Ожидание", formatKopecks(metrics.expectationKopecks)));
     card.append(header, metricsGrid);
@@ -1404,11 +1400,7 @@
       createElement("div", "day-view__date", capitalize(formatDate(selected, { day: "numeric", month: "long", year: "numeric" }))),
     );
     const headingActions = createElement("div", "day-view__actions");
-    const addRevenue = createElement("button", "button button--secondary", "Добавить оплату");
-    addRevenue.type = "button";
-    addRevenue.dataset.action = "new-revenue";
-    addRevenue.dataset.date = selected;
-    headingActions.append(addRevenue, buildAddTaskButton(selected));
+    headingActions.append(buildAddTaskButton(selected));
     heading.append(titleWrap, headingActions);
     view.append(heading);
     const list = buildTaskList(selected);
@@ -1788,7 +1780,7 @@
       } else {
         next.tasks.push({ id: createId("task"), ...result.value, createdAt: now, updatedAt: now });
       }
-    }, existing ? "Задача сохранена" : "Задача создана");
+    }, "Задача сохранена");
     closeDialog(elements.taskDialog);
   }
 
@@ -1813,7 +1805,7 @@
   function restoreTask(trashId) {
     updateState((next) => {
       restoreTaskFromTrashState(next, trashId, createId("task"), new Date().toISOString());
-    }, "Задача восстановлена");
+    }, "Запись восстановлена");
   }
 
   function purgeTask(trashId) {
@@ -1864,7 +1856,7 @@
       const moved = next.tasks.find((item) => item.id === taskId);
       moved.date = dateKey;
       moved.updatedAt = new Date().toISOString();
-    }, `Задача перенесена на ${formatDate(dateKey, { day: "numeric", month: "long" })}`);
+    }, "Задача перенесена");
     return true;
   }
 
@@ -2008,7 +2000,7 @@
       } else {
         next.revenueEntries.push({ id: createId("revenue"), ...result.value, createdAt: now, updatedAt: now });
       }
-    }, existing ? "Оплата сохранена" : "Оплата добавлена");
+    }, "Запись сохранена");
     closeDialog(elements.revenueDialog);
   }
 
@@ -2023,7 +2015,7 @@
   function restoreRevenue(trashId) {
     updateState((next) => {
       restoreRevenueFromTrashState(next, trashId, createId("revenue"), new Date().toISOString());
-    }, "Оплата восстановлена");
+    }, "Запись восстановлена");
   }
 
   function purgeRevenue(trashId) {
@@ -2051,7 +2043,7 @@
   }
   function toggleFollowUp(id, completed) { const now = new Date().toISOString(); updateState((next) => { const item = next.followUps.find((entry) => entry.id === id); if (!item) return; item.completed = completed; item.completedAt = completed ? now : null; item.updatedAt = now; }, completed ? "Возврат выполнен" : "Возврат снова активен"); }
   function deleteFollowUp(id) { if (!getFollowUp(id)) return; updateState((next) => { moveFollowUpToTrashState(next, id, createId("trash"), new Date().toISOString()); }, "Перемещено в корзину"); closeDialog(elements.followUpDialog); }
-  function restoreFollowUp(trashId) { updateState((next) => { restoreFollowUpFromTrashState(next, trashId, createId("follow-up")); }, "Клиент восстановлен"); }
+  function restoreFollowUp(trashId) { updateState((next) => { restoreFollowUpFromTrashState(next, trashId, createId("follow-up")); }, "Запись восстановлена"); }
   function purgeFollowUp(trashId) { updateState((next) => { next.trash = next.trash.filter((item) => item.id !== trashId); }, "Клиент удалён навсегда"); }
   async function copyFollowUpContact(id) { const item = getFollowUp(id); if (!item?.contactValue) return; const copied = await copyText(item.contactValue); showToast(copied ? "Контакт скопирован" : "Не удалось скопировать контакт"); }
 

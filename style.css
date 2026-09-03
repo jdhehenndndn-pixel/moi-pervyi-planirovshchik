@@ -317,6 +317,11 @@ main {
   text-transform: uppercase;
 }
 
+.workspace-heading__description {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+}
+
 h1,
 h2,
 p {
