@@ -1,0 +1,493 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Тихий темп — локальный планировщик задач, клиентов и выручки."
+    />
+    <link rel="icon" href="data:," />
+    <title>Тихий темп</title>
+    <link rel="stylesheet" href="style.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Перейти к содержимому</a>
+
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="brand" aria-label="Тихий темп">
+          <span class="brand__mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" role="img">
+              <path d="M5 22c4-9 9-13 13-13 4 0 7 3 9 8-6-2-11 0-14 6-3 0-6 0-8-1Z" />
+              <path d="M9 11c2 2 3 5 3 8M21 7c-1 3-1 6 1 9" />
+            </svg>
+          </span>
+          <span>
+            <span class="brand__eyebrow">Личный ритм работы</span>
+            <span class="brand__name">Тихий темп</span>
+          </span>
+        </div>
+
+        <nav class="section-nav" aria-label="Основные разделы">
+          <button class="section-nav__button is-active" type="button" data-section="planner">
+            Планировщик
+          </button>
+          <button class="section-nav__button" type="button" data-section="clients">
+            Клиенты
+          </button>
+        </nav>
+
+        <button
+          class="icon-button header-settings"
+          id="settings-button"
+          type="button"
+          aria-label="Открыть настройки"
+          title="Настройки"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+            <path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.06.06-1.42 1.42-.06-.06a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.1 1.65V20h-2v-.31a1.8 1.8 0 0 0-1.1-1.65 1.8 1.8 0 0 0-1.98.36l-.06.06-1.42-1.42.06-.06A1.8 1.8 0 0 0 9.12 15a1.8 1.8 0 0 0-1.65-1.1H7v-2h.47a1.8 1.8 0 0 0 1.65-1.1 1.8 1.8 0 0 0-.36-1.98l-.06-.06 1.42-1.42.06.06a1.8 1.8 0 0 0 1.98.36 1.8 1.8 0 0 0 1.1-1.65V6h2v.11a1.8 1.8 0 0 0 1.1 1.65 1.8 1.8 0 0 0 1.98-.36l.06-.06 1.42 1.42-.06.06a1.8 1.8 0 0 0-.36 1.98 1.8 1.8 0 0 0 1.65 1.1H21v2h-.95A1.8 1.8 0 0 0 19.4 15Z" />
+          </svg>
+        </button>
+      </header>
+
+      <div class="system-banner system-banner--warning" id="storage-warning" role="alert" hidden>
+        <div>
+          <strong>Есть несохранённые изменения</strong>
+          <p id="storage-warning-text">Браузер не смог записать данные.</p>
+        </div>
+        <div class="system-banner__actions">
+          <button class="button button--secondary" id="retry-save-button" type="button">
+            Повторить сохранение
+          </button>
+          <button class="button button--ghost" id="export-memory-button" type="button">
+            Скачать копию
+          </button>
+        </div>
+      </div>
+
+      <div class="system-banner system-banner--info" id="conflict-warning" role="alert" hidden>
+        <div>
+          <strong>Данные изменились в другой вкладке</strong>
+          <p>Выберите свежую версию или сохраните свою копию перед обновлением.</p>
+        </div>
+        <div class="system-banner__actions">
+          <button class="button button--secondary" id="load-fresh-button" type="button">
+            Загрузить свежие
+          </button>
+          <button class="button button--ghost" id="export-conflict-button" type="button">
+            Скачать мою версию
+          </button>
+        </div>
+      </div>
+
+      <main id="main-content" tabindex="-1">
+        <section id="planner-section" aria-labelledby="planner-heading">
+          <div class="workspace-heading">
+            <div>
+              <p class="workspace-heading__kicker">Планировщик</p>
+              <h1 id="planner-heading">Неделя в спокойном ритме</h1>
+            </div>
+            <div class="view-switcher" role="group" aria-label="Масштаб календаря">
+              <button type="button" data-view="day">День</button>
+              <button class="is-active" type="button" data-view="week">Неделя</button>
+              <button type="button" data-view="month">Месяц</button>
+            </div>
+            <div class="workspace-heading__actions">
+              <button class="button button--secondary" id="new-revenue-button" type="button">
+                Добавить оплату
+              </button>
+              <button class="button button--primary" id="new-task-button" type="button">
+                Новая задача
+              </button>
+            </div>
+          </div>
+
+          <div class="period-toolbar" aria-label="Навигация по датам">
+            <button class="icon-button" id="previous-period" type="button" aria-label="Предыдущий период">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+            </button>
+            <div class="period-toolbar__title" aria-live="polite">
+              <span id="period-title">Текущая неделя</span>
+              <span class="period-toolbar__caption" id="period-caption">Понедельник — воскресенье</span>
+            </div>
+            <button class="button button--quiet" id="today-button" type="button">Сегодня</button>
+            <button class="icon-button" id="next-period" type="button" aria-label="Следующий период">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg>
+            </button>
+          </div>
+
+          <div class="attention-grid">
+            <details class="attention-panel" id="overdue-tasks">
+              <summary>
+                <span>Просроченные задачи</span>
+                <span class="count-badge" id="overdue-count">0</span>
+              </summary>
+              <div class="attention-panel__content" id="overdue-list"></div>
+            </details>
+            <details class="attention-panel" id="overdue-revenue">
+              <summary>
+                <span>Просроченные ожидания</span>
+                <span class="count-badge" id="overdue-revenue-count">0</span>
+              </summary>
+              <div class="attention-panel__content" id="overdue-revenue-list"></div>
+            </details>
+          </div>
+
+          <div class="summary-grid" id="financial-summary" aria-label="Финансовая сводка" aria-live="polite"></div>
+
+          <section class="planner-surface" id="planner-surface" aria-live="polite"></section>
+        </section>
+
+        <section id="clients-section" aria-labelledby="clients-heading" hidden>
+          <div class="workspace-heading workspace-heading--clients">
+            <div>
+              <p class="workspace-heading__kicker">Возвраты к клиентам</p>
+              <h1 id="clients-heading">Кому нужно написать</h1>
+            </div>
+            <button class="button button--primary" id="new-follow-up-button" type="button">
+              Добавить клиента
+            </button>
+          </div>
+          <div class="clients-toolbar">
+            <label class="toggle-control" for="hide-completed-follow-ups">
+              <input id="hide-completed-follow-ups" type="checkbox" />
+              <span>Скрыть выполненные</span>
+            </label>
+          </div>
+          <div class="follow-up-list" id="follow-up-list" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="dialog" id="settings-dialog" aria-labelledby="settings-title">
+      <div class="dialog__header">
+        <div>
+          <p class="dialog__kicker">Локальные данные</p>
+          <h2 id="settings-title">Настройки</h2>
+        </div>
+        <button class="icon-button" id="settings-close" type="button" aria-label="Закрыть настройки">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      </div>
+      <div class="dialog__body">
+        <div class="privacy-note">
+          <strong>Данные остаются в этом браузере</strong>
+          <p>
+            Они не синхронизируются и хранятся без шифрования. Не используйте общий профиль
+            браузера для личных контактов.
+          </p>
+        </div>
+        <div class="settings-row">
+          <div>
+            <strong>Резервная копия</strong>
+            <p>Скачать текущее состояние приложения в JSON.</p>
+          </div>
+          <button class="button button--secondary" id="export-settings-button" type="button">
+            Скачать
+          </button>
+        </div>
+        <div class="settings-row">
+          <div>
+            <strong>Восстановить из копии</strong>
+            <p>JSON-файл полностью заменит текущие данные после проверки.</p>
+          </div>
+          <button class="button button--secondary" id="import-settings-button" type="button">Выбрать файл</button>
+          <input id="import-file-input" type="file" accept="application/json,.json" hidden />
+        </div>
+        <div class="settings-block">
+          <div>
+            <strong>Корзина задач</strong>
+            <p>Задачу можно восстановить или удалить окончательно.</p>
+          </div>
+          <div class="trash-list" id="task-trash-list"></div>
+        </div>
+        <div class="settings-block">
+          <div>
+            <strong>Корзина оплат</strong>
+            <p>Финансовую запись можно восстановить или удалить окончательно.</p>
+          </div>
+          <div class="trash-list" id="revenue-trash-list"></div>
+        </div>
+        <div class="settings-block">
+          <div>
+            <strong>Корзина клиентов</strong>
+            <p>Возврат можно восстановить или удалить окончательно.</p>
+          </div>
+          <div class="trash-list" id="follow-up-trash-list"></div>
+        </div>
+        <div class="settings-row">
+          <div>
+            <strong>Очистить корзину</strong>
+            <p>Навсегда удалить все элементы корзины.</p>
+          </div>
+          <button class="button button--danger" id="empty-trash-button" type="button">Очистить</button>
+        </div>
+        <div class="settings-row settings-row--danger">
+          <div>
+            <strong>Удалить все данные</strong>
+            <p>Сначала приложение попробует скачать резервную копию.</p>
+          </div>
+          <button class="button button--danger" id="clear-data-button" type="button">Удалить всё</button>
+        </div>
+      </div>
+    </dialog>
+
+    <dialog class="dialog" id="follow-up-dialog" aria-labelledby="follow-up-dialog-title">
+      <form id="follow-up-form" novalidate>
+        <div class="dialog__header">
+          <div><p class="dialog__kicker">Возврат к клиенту</p><h2 id="follow-up-dialog-title">Добавить клиента</h2></div>
+          <button class="icon-button" id="follow-up-close" type="button" aria-label="Закрыть форму клиента"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button>
+        </div>
+        <div class="dialog__body">
+          <div class="form-error-summary" id="follow-up-error-summary" role="alert" tabindex="-1" hidden></div>
+          <input name="id" type="hidden" />
+          <div class="form-grid">
+            <div class="field field--wide"><label for="follow-up-name">Имя или обозначение <span aria-hidden="true">*</span></label><input id="follow-up-name" name="name" type="text" maxlength="120" aria-describedby="follow-up-name-error" /><span class="field__error" id="follow-up-name-error"></span></div>
+            <div class="field"><label for="follow-up-date">Дата <span aria-hidden="true">*</span></label><input id="follow-up-date" name="date" type="date" aria-describedby="follow-up-date-error" /><span class="field__error" id="follow-up-date-error"></span></div>
+            <div class="field"><label for="follow-up-time">Время <span aria-hidden="true">*</span></label><input id="follow-up-time" name="time" type="time" aria-describedby="follow-up-time-error" /><span class="field__error" id="follow-up-time-error"></span></div>
+            <div class="field field--wide"><label for="follow-up-comment">Комментарий</label><textarea id="follow-up-comment" name="comment" rows="4" maxlength="1000" aria-describedby="follow-up-comment-error"></textarea><span class="field__error" id="follow-up-comment-error"></span></div>
+            <div class="field"><label for="follow-up-contact-label">Контактная метка</label><input id="follow-up-contact-label" name="contactLabel" type="text" maxlength="50" placeholder="Например, Telegram" aria-describedby="follow-up-contact-label-error" /><span class="field__error" id="follow-up-contact-label-error"></span></div>
+            <div class="field"><label for="follow-up-contact-value">Значение контакта</label><input id="follow-up-contact-value" name="contactValue" type="text" maxlength="500" placeholder="Например, @contact" aria-describedby="follow-up-contact-value-error" /><span class="field__error" id="follow-up-contact-value-error"></span></div>
+          </div>
+          <div class="dialog__actions dialog__actions--split"><button class="button button--danger" id="follow-up-delete" type="button" hidden>Удалить</button><span class="dialog__actions-spacer"></span><button class="button button--ghost" id="follow-up-cancel" type="button">Отмена</button><button class="button button--primary" type="submit">Сохранить клиента</button></div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="dialog dialog--critical dialog--compact" id="data-confirm-dialog" aria-labelledby="data-confirm-title">
+      <div class="dialog__header"><div><p class="dialog__kicker">Опасное действие</p><h2 id="data-confirm-title">Подтвердите действие</h2></div><button class="icon-button" id="data-confirm-close" type="button" aria-label="Закрыть подтверждение"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg></button></div>
+      <div class="dialog__body"><p id="data-confirm-message"></p><div class="form-error-summary" id="data-operation-error" role="alert" hidden></div><div class="dialog__actions"><button class="button button--ghost" id="data-confirm-cancel" type="button">Отмена</button><button class="button button--danger" id="data-confirm-submit" type="button">Продолжить</button><button class="button button--danger" id="continue-without-backup" type="button" hidden>Продолжить без копии</button></div></div>
+    </dialog>
+
+    <dialog class="dialog dialog--task" id="task-dialog" aria-labelledby="task-dialog-title">
+      <form id="task-form" novalidate>
+        <div class="dialog__header">
+          <div>
+            <p class="dialog__kicker">Планировщик</p>
+            <h2 id="task-dialog-title">Новая задача</h2>
+          </div>
+          <button class="icon-button" id="task-close" type="button" aria-label="Закрыть форму задачи">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+        <div class="dialog__body">
+          <div class="form-error-summary" id="task-error-summary" role="alert" tabindex="-1" hidden></div>
+          <input id="task-id" name="id" type="hidden" />
+
+          <div class="field field--wide">
+            <label for="task-description">Описание <span aria-hidden="true">*</span></label>
+            <textarea id="task-description" name="description" rows="4" maxlength="500" required aria-describedby="task-description-error"></textarea>
+            <span class="field__hint">До 500 символов</span>
+            <span class="field__error" id="task-description-error"></span>
+          </div>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="task-date">Дата <span aria-hidden="true">*</span></label>
+              <input id="task-date" name="date" type="date" required aria-describedby="task-date-error" />
+              <span class="field__error" id="task-date-error"></span>
+            </div>
+            <div class="field">
+              <label for="task-time">Время</label>
+              <input id="task-time" name="time" type="time" aria-describedby="task-time-hint task-time-error" />
+              <span class="field__hint" id="task-time-hint">Оставьте пустым для блока «Без времени»</span>
+              <span class="field__error" id="task-time-error"></span>
+            </div>
+            <div class="field">
+              <label for="task-priority">Приоритет</label>
+              <select id="task-priority" name="priority">
+                <option value="low">Низкий</option>
+                <option value="normal" selected>Обычный</option>
+                <option value="high">Высокий</option>
+              </select>
+              <span class="field__error" id="task-priority-error"></span>
+            </div>
+            <div class="field">
+              <label for="task-product">Продукт <span aria-hidden="true">*</span></label>
+              <select id="task-product" name="product" required aria-describedby="task-product-error">
+                <option value="">Выберите продукт</option>
+                <option value="vibeCoding">Вайб-кодинг</option>
+                <option value="aiSkills">ИИ-навыки</option>
+                <option value="other">Другое</option>
+              </select>
+              <span class="field__error" id="task-product-error"></span>
+            </div>
+            <div class="field field--wide" id="custom-product-field" hidden>
+              <label for="task-custom-product">Название продукта <span aria-hidden="true">*</span></label>
+              <input id="task-custom-product" name="customProduct" type="text" maxlength="80" aria-describedby="task-custom-product-error" />
+              <span class="field__error" id="task-custom-product-error"></span>
+            </div>
+          </div>
+
+          <fieldset class="field-group">
+            <legend>Контактная метка</legend>
+            <p class="field__hint">Заполните оба поля или оставьте оба пустыми.</p>
+            <div class="form-grid">
+              <div class="field">
+                <label for="task-contact-label">Короткая метка</label>
+                <input id="task-contact-label" name="contactLabel" type="text" maxlength="50" placeholder="Например, Telegram" aria-describedby="task-contact-label-error" />
+                <span class="field__error" id="task-contact-label-error"></span>
+              </div>
+              <div class="field">
+                <label for="task-contact-value">Значение</label>
+                <input id="task-contact-value" name="contactValue" type="text" maxlength="500" placeholder="Например, @contact" aria-describedby="task-contact-value-error" />
+                <span class="field__error" id="task-contact-value-error"></span>
+              </div>
+            </div>
+          </fieldset>
+
+          <div class="field" id="task-status-field" hidden>
+            <label for="task-status">Статус</label>
+            <select id="task-status" name="status">
+              <option value="planned">Запланировано</option>
+              <option value="completed">Выполнено</option>
+              <option value="cancelled">Отменено</option>
+            </select>
+          </div>
+
+          <div class="dialog__actions dialog__actions--split">
+            <button class="button button--danger" id="task-delete" type="button" hidden>Удалить</button>
+            <span class="dialog__actions-spacer"></span>
+            <button class="button button--ghost" id="task-cancel" type="button">Отмена</button>
+            <button class="button button--primary" type="submit">Сохранить задачу</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="dialog" id="revenue-dialog" aria-labelledby="revenue-dialog-title">
+      <form id="revenue-form" novalidate>
+        <div class="dialog__header">
+          <div>
+            <p class="dialog__kicker">Финансы</p>
+            <h2 id="revenue-dialog-title">Добавить оплату</h2>
+          </div>
+          <button class="icon-button" id="revenue-close" type="button" aria-label="Закрыть форму оплаты">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+        <div class="dialog__body">
+          <div class="form-error-summary" id="revenue-error-summary" role="alert" tabindex="-1" hidden></div>
+          <input id="revenue-id" name="id" type="hidden" />
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="revenue-amount">Сумма, ₽ <span aria-hidden="true">*</span></label>
+              <input id="revenue-amount" name="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="Например, 45 000 или 1200,50" aria-describedby="revenue-amount-hint revenue-amount-error" />
+              <span class="field__hint" id="revenue-amount-hint">От 0,01 до 999 999 999,99 ₽</span>
+              <span class="field__error" id="revenue-amount-error"></span>
+            </div>
+            <div class="field">
+              <label for="revenue-status">Статус <span aria-hidden="true">*</span></label>
+              <select id="revenue-status" name="status" aria-describedby="revenue-status-error">
+                <option value="expected">Ожидается</option>
+                <option value="received">Получено</option>
+              </select>
+              <span class="field__error" id="revenue-status-error"></span>
+            </div>
+            <div class="field">
+              <label for="revenue-product">Продукт <span aria-hidden="true">*</span></label>
+              <select id="revenue-product" name="product" aria-describedby="revenue-product-error">
+                <option value="">Выберите продукт</option>
+                <option value="vibeCoding">Вайб-кодинг</option>
+                <option value="aiSkills">ИИ-навыки</option>
+                <option value="other">Другое</option>
+              </select>
+              <span class="field__error" id="revenue-product-error"></span>
+            </div>
+            <div class="field" id="revenue-custom-product-field" hidden>
+              <label for="revenue-custom-product">Название продукта <span aria-hidden="true">*</span></label>
+              <input id="revenue-custom-product" name="customProduct" type="text" maxlength="80" aria-describedby="revenue-custom-product-error" />
+              <span class="field__error" id="revenue-custom-product-error"></span>
+            </div>
+            <div class="field" id="revenue-expected-date-field">
+              <label for="revenue-expected-date">Ожидаемая дата <span aria-hidden="true">*</span></label>
+              <input id="revenue-expected-date" name="expectedDate" type="date" aria-describedby="revenue-expected-date-error" />
+              <span class="field__error" id="revenue-expected-date-error"></span>
+            </div>
+            <div class="field" id="revenue-received-date-field" hidden>
+              <label for="revenue-received-date">Фактическая дата <span aria-hidden="true">*</span></label>
+              <input id="revenue-received-date" name="receivedDate" type="date" aria-describedby="revenue-received-date-hint revenue-received-date-error" />
+              <span class="field__hint" id="revenue-received-date-hint">Укажите вручную; будущая дата недоступна.</span>
+              <span class="field__error" id="revenue-received-date-error"></span>
+            </div>
+          </div>
+
+          <div class="field field--wide">
+            <label for="revenue-comment">Комментарий</label>
+            <textarea id="revenue-comment" name="comment" rows="4" maxlength="500" aria-describedby="revenue-comment-hint revenue-comment-error"></textarea>
+            <span class="field__hint" id="revenue-comment-hint">До 500 символов</span>
+            <span class="field__error" id="revenue-comment-error"></span>
+          </div>
+
+          <div class="dialog__actions dialog__actions--split">
+            <button class="button button--danger" id="revenue-delete" type="button" hidden>Удалить</button>
+            <span class="dialog__actions-spacer"></span>
+            <button class="button button--ghost" id="revenue-cancel" type="button">Отмена</button>
+            <button class="button button--primary" type="submit">Сохранить оплату</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="dialog dialog--compact" id="plan-dialog" aria-labelledby="plan-dialog-title">
+      <form id="plan-form" novalidate>
+        <div class="dialog__header">
+          <div>
+            <p class="dialog__kicker">Финансовый ориентир</p>
+            <h2 id="plan-dialog-title">Задать план</h2>
+          </div>
+          <button class="icon-button" id="plan-close" type="button" aria-label="Закрыть форму плана">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+        <div class="dialog__body">
+          <p id="plan-period-label"></p>
+          <div class="form-error-summary" id="plan-error-summary" role="alert" tabindex="-1" hidden></div>
+          <input id="plan-type" name="type" type="hidden" />
+          <input id="plan-key" name="key" type="hidden" />
+          <div class="field">
+            <label for="plan-amount">Сумма плана, ₽ <span aria-hidden="true">*</span></label>
+            <input id="plan-amount" name="amount" type="text" inputmode="decimal" autocomplete="off" aria-describedby="plan-amount-hint plan-amount-error" />
+            <span class="field__hint" id="plan-amount-hint">Положительная сумма до 999 999 999,99 ₽</span>
+            <span class="field__error" id="plan-amount-error"></span>
+          </div>
+          <div class="dialog__actions dialog__actions--split">
+            <button class="button button--danger" id="plan-reset" type="button" hidden>Сбросить план</button>
+            <span class="dialog__actions-spacer"></span>
+            <button class="button button--ghost" id="plan-cancel" type="button">Отмена</button>
+            <button class="button button--primary" type="submit">Сохранить план</button>
+          </div>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="dialog dialog--critical" id="recovery-dialog" aria-labelledby="recovery-title">
+      <div class="dialog__header">
+        <div>
+          <p class="dialog__kicker">Нужно восстановление</p>
+          <h2 id="recovery-title">Локальные данные повреждены</h2>
+        </div>
+      </div>
+      <div class="dialog__body">
+        <p>
+          Приложение не будет перезаписывать повреждённые данные без вашего решения. Сначала
+          можно скачать исходное содержимое, затем начать с пустого состояния.
+        </p>
+        <div class="dialog__actions">
+          <button class="button button--secondary" id="download-corrupt-button" type="button">
+            Скачать повреждённые данные
+          </button>
+          <button class="button button--danger" id="start-fresh-button" type="button">
+            Начать с пустого состояния
+          </button>
+        </div>
+      </div>
+    </dialog>
+
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+  </body>
+</html>
