@@ -383,6 +383,7 @@ h2 {
 .summary-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(260px, 0.9fr);
+  align-items: start;
   gap: 12px;
   margin-bottom: 0;
 }
@@ -515,6 +516,155 @@ h2 {
   color: var(--color-blue-deep);
   font-size: 0.8125rem;
   font-weight: 800;
+}
+
+.product-finance-list {
+  display: grid;
+  gap: 8px;
+}
+
+.product-finance {
+  overflow: hidden;
+  border: 1px solid rgb(73 103 117 / 0.18);
+  border-radius: 12px;
+  background: rgb(255 253 247 / 0.58);
+}
+
+.product-finance__summary {
+  position: relative;
+  display: grid;
+  min-height: 56px;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(190px, 1.3fr);
+  align-items: center;
+  gap: 10px 16px;
+  padding: 10px 38px 10px 12px;
+  color: var(--color-ink);
+  cursor: pointer;
+  list-style: none;
+}
+
+.product-finance__summary::-webkit-details-marker {
+  display: none;
+}
+
+.product-finance__summary::after {
+  position: absolute;
+  right: 15px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--color-blue-deep);
+  border-bottom: 2px solid var(--color-blue-deep);
+  content: "";
+  transform: rotate(45deg);
+  transition: transform 160ms ease;
+}
+
+.product-finance[open] .product-finance__summary::after {
+  transform: rotate(225deg);
+}
+
+.product-finance__summary:hover {
+  background: rgb(169 190 199 / 0.11);
+}
+
+.product-finance__summary:focus-visible {
+  outline: 3px solid rgb(73 103 117 / 0.32);
+  outline-offset: -3px;
+}
+
+.product-finance__identity {
+  display: grid;
+  gap: 2px;
+}
+
+.product-finance__note {
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+
+.product-finance__headline {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 16px;
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.product-finance__headline strong {
+  color: var(--color-ink);
+}
+
+.product-finance__progress {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  grid-column: 1 / -1;
+  border-radius: 999px;
+  background: rgb(201 194 181 / 0.26);
+}
+
+.product-finance__progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-green);
+}
+
+.product-finance__details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 10px 10px;
+  border-top: 1px solid rgb(73 103 117 / 0.12);
+}
+
+.product-finance__details .finance-metric {
+  padding: 8px;
+  border: 0;
+  background: transparent;
+}
+
+.product-finance-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 2px;
+  color: var(--color-ink);
+  font-size: 0.84rem;
+}
+
+.product-finance-total__values {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px 14px;
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.legacy-plan-notice,
+.legacy-plan-form-note {
+  padding: 9px 11px;
+  border: 1px solid rgb(169 71 53 / 0.24);
+  border-radius: 10px;
+  background: #fff3ed;
+  color: var(--color-muted);
+  font-size: 0.84rem;
+}
+
+.legacy-plan-notice {
+  margin: -7px 0 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-finance__summary::after {
+    transition: none;
+  }
 }
 
 .attention-grid {
@@ -1558,6 +1708,12 @@ h2 {
   gap: 5px;
 }
 
+.plan-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .field--wide {
   grid-column: 1 / -1;
 }
@@ -2065,6 +2221,27 @@ h2 {
   .finance-metrics--compact,
   .finance-metrics--day {
     grid-template-columns: 1fr;
+  }
+
+  .product-finance__summary {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .product-finance__headline,
+  .product-finance-total__values {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .product-finance__details,
+  .plan-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .product-finance-total {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .summary-card__header {

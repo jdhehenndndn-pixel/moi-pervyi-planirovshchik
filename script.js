@@ -4,13 +4,15 @@
   const STORAGE_KEY = "quietPace.appState.v1";
   const QUOTE_ROTATION_KEY = "myCorner.quoteRotation.v1";
   const QUOTE_ROTATION_INTERVAL_MS = 5 * 60 * 60 * 1000;
-  const SCHEMA_VERSION = 1;
+  const SCHEMA_VERSION = 2;
   const MOSCOW_TIME_ZONE = "Europe/Moscow";
   const MAX_KOPECKS = 99_999_999_999;
   const VALID_SECTIONS = new Set(["planner", "clients"]);
   const VALID_VIEWS = new Set(["day", "week", "month"]);
   const VALID_TASK_PRIORITIES = new Set(["low", "normal", "high"]);
   const VALID_TASK_PRODUCTS = new Set(["vibeCoding", "aiSkills", "other"]);
+  const PLAN_PRODUCTS = Object.freeze(["vibeCoding", "aiSkills"]);
+  const VALID_PLAN_PRODUCTS = new Set(PLAN_PRODUCTS);
   const VALID_TASK_STATUSES = new Set(["planned", "completed", "cancelled"]);
   const VALID_REVENUE_STATUSES = new Set(["expected", "received", "cancelled"]);
   const VALID_TRASH_TYPES = new Set(["task", "revenue", "followUp"]);
@@ -209,12 +211,13 @@
     }).format(amountKopecks / 100);
   }
 
-  function sumEntries(entries, status, dateField, startKey, endKey) {
+  function sumEntries(entries, status, dateField, startKey, endKey, product = null) {
     if (!Array.isArray(entries)) return 0;
     return entries.reduce((sum, entry) => {
       if (
         entry &&
         entry.status === status &&
+        (product === null || entry.product === product) &&
         Number.isInteger(entry.amountKopecks) &&
         entry.amountKopecks > 0 &&
         isDateInRange(entry[dateField], startKey, endKey)
@@ -225,12 +228,12 @@
     }, 0);
   }
 
-  function calculateFact(entries, startKey, endKey) {
-    return sumEntries(entries, "received", "receivedDate", startKey, endKey);
+  function calculateFact(entries, startKey, endKey, product = null) {
+    return sumEntries(entries, "received", "receivedDate", startKey, endKey, product);
   }
 
-  function calculateExpectation(entries, startKey, endKey) {
-    return sumEntries(entries, "expected", "expectedDate", startKey, endKey);
+  function calculateExpectation(entries, startKey, endKey, product = null) {
+    return sumEntries(entries, "expected", "expectedDate", startKey, endKey, product);
   }
 
   function calculateCompletion(factKopecks, planKopecks) {
@@ -308,8 +311,19 @@
       raw = storage.getItem(STORAGE_KEY);
       if (raw === null) return { status: "missing", raw: null, state: null };
       const parsed = JSON.parse(raw);
-      if (!isValidAppState(parsed)) return { status: "invalid", raw, state: null };
-      return { status: "valid", raw, state: parsed };
+      if (![1, SCHEMA_VERSION].includes(parsed?.schemaVersion)) return { status: "invalid", raw, state: null };
+      const normalized = normalizeAppState(parsed, parsed.schemaVersion);
+      if (parsed.schemaVersion === 1) {
+        normalized.revision += 1;
+        try {
+          storage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+          return { status: "valid", raw, state: normalized, migrated: true };
+        } catch (error) {
+          normalized.revision = parsed.revision;
+          return { status: "valid", raw, state: normalized, migrated: true, migrationError: error };
+        }
+      }
+      return { status: "valid", raw, state: normalized, migrated: false };
     } catch (error) {
       return { status: "error", raw, state: null, error };
     }
@@ -447,10 +461,50 @@
     }
   }
 
-  function normalizeImportedBackup(envelope) {
-    if (!isPlainObject(envelope) || envelope.schemaVersion !== SCHEMA_VERSION || !isIsoDateTime(envelope.exportedAt) || !isPlainObject(envelope.data)) throw new Error("Файл не является резервной копией версии 1");
-    const source = envelope.data;
-    if (source.schemaVersion !== SCHEMA_VERSION || !Number.isInteger(source.revision) || source.revision < 0) throw new Error("Версия или ревизия состояния некорректна");
+  function normalizePlanAmounts(source, label) {
+    if (!isPlainObject(source)) throw new Error(`${label}: отсутствуют суммы по продуктам`);
+    const amounts = {};
+    for (const [product, amountKopecks] of Object.entries(source)) {
+      if (!VALID_PLAN_PRODUCTS.has(product)) throw new Error(`${label}: неизвестный продукт`);
+      if (!Number.isInteger(amountKopecks) || amountKopecks < 1 || amountKopecks > MAX_KOPECKS) throw new Error(`${label}.${product}: некорректная сумма`);
+      amounts[product] = amountKopecks;
+    }
+    return amounts;
+  }
+
+  function normalizePlanRecord(item, key, type, sourceVersion) {
+    const isMonth = type === "month";
+    const label = `${isMonth ? "Месячный" : "Недельный"} план ${key}`;
+    if (!isPlainObject(item)) throw new Error(`${label}: некорректные данные`);
+    if (isMonth) {
+      if (!/^\d{4}-\d{2}$/.test(key) || item.monthKey !== key || !isValidDateKey(`${key}-01`)) throw new Error(`${label}: некорректный период`);
+    } else if (!/^\d{4}-W\d{2}$/.test(key) || item.weekKey !== key || !isValidDateKey(item.startDate) || startOfWeek(item.startDate) !== item.startDate || getIsoWeekInfo(item.startDate).weekKey !== key) {
+      throw new Error(`${label}: некорректный период`);
+    }
+    if (!isIsoDateTime(item.updatedAt)) throw new Error(`${label}: некорректное время изменения`);
+    if (sourceVersion === 1) {
+      if (!Number.isInteger(item.amountKopecks) || item.amountKopecks < 1 || item.amountKopecks > MAX_KOPECKS) throw new Error(`${label}: некорректная сумма`);
+      return {
+        ...(isMonth ? { monthKey: key } : { weekKey: key, startDate: item.startDate }),
+        amountsKopecks: {},
+        legacyTotalKopecks: item.amountKopecks,
+        updatedAt: item.updatedAt,
+      };
+    }
+    const amountsKopecks = normalizePlanAmounts(item.amountsKopecks, label);
+    const legacyTotalKopecks = item.legacyTotalKopecks ?? null;
+    if (legacyTotalKopecks !== null && (!Number.isInteger(legacyTotalKopecks) || legacyTotalKopecks < 1 || legacyTotalKopecks > MAX_KOPECKS)) throw new Error(`${label}: некорректный прежний итог`);
+    if (!Object.keys(amountsKopecks).length && legacyTotalKopecks === null) throw new Error(`${label}: план пуст`);
+    return {
+      ...(isMonth ? { monthKey: key } : { weekKey: key, startDate: item.startDate }),
+      amountsKopecks,
+      legacyTotalKopecks,
+      updatedAt: item.updatedAt,
+    };
+  }
+
+  function normalizeAppState(source, sourceVersion = source?.schemaVersion) {
+    if (!isPlainObject(source) || ![1, SCHEMA_VERSION].includes(sourceVersion) || source.schemaVersion !== sourceVersion || !Number.isInteger(source.revision) || source.revision < 0) throw new Error("Версия или ревизия состояния некорректна");
     for (const key of ["tasks", "revenueEntries", "followUps", "trash"]) if (!Array.isArray(source[key])) throw new Error(`Отсутствует коллекция ${key}`);
     if (!isPlainObject(source.monthlyPlans) || !isPlainObject(source.weeklyPlans) || !isPlainObject(source.settings)) throw new Error("Отсутствуют планы или настройки");
     for (const [key, limit] of Object.entries(COLLECTION_LIMITS)) if (source[key].length > limit) throw new Error(`${key}: превышен лимит ${limit}`);
@@ -460,13 +514,11 @@
     assertUniqueIds(tasks, "Задачи"); assertUniqueIds(revenueEntries, "Оплаты"); assertUniqueIds(followUps, "Клиенты");
     const monthlyPlans = {};
     for (const [key, item] of Object.entries(source.monthlyPlans)) {
-      if (!/^\d{4}-\d{2}$/.test(key) || !isPlainObject(item) || item.monthKey !== key || !isValidDateKey(`${key}-01`) || !Number.isInteger(item.amountKopecks) || item.amountKopecks < 1 || item.amountKopecks > MAX_KOPECKS || !isIsoDateTime(item.updatedAt)) throw new Error(`Месячный план ${key}: некорректные данные`);
-      monthlyPlans[key] = { monthKey: key, amountKopecks: item.amountKopecks, updatedAt: item.updatedAt };
+      monthlyPlans[key] = normalizePlanRecord(item, key, "month", sourceVersion);
     }
     const weeklyPlans = {};
     for (const [key, item] of Object.entries(source.weeklyPlans)) {
-      if (!/^\d{4}-W\d{2}$/.test(key) || !isPlainObject(item) || item.weekKey !== key || !isValidDateKey(item.startDate) || startOfWeek(item.startDate) !== item.startDate || getIsoWeekInfo(item.startDate).weekKey !== key || !Number.isInteger(item.amountKopecks) || item.amountKopecks < 1 || item.amountKopecks > MAX_KOPECKS || !isIsoDateTime(item.updatedAt)) throw new Error(`Недельный план ${key}: некорректные данные`);
-      weeklyPlans[key] = { weekKey: key, startDate: item.startDate, amountKopecks: item.amountKopecks, updatedAt: item.updatedAt };
+      weeklyPlans[key] = normalizePlanRecord(item, key, "week", sourceVersion);
     }
     const trash = source.trash.map((item, index) => {
       if (!isPlainObject(item) || !VALID_TRASH_TYPES.has(item.entityType) || !isIsoDateTime(item.deletedAt)) throw new Error(`Корзина ${index + 1}: некорректные данные`);
@@ -479,6 +531,11 @@
     const settings = { activeSection: source.settings.activeSection, calendarView: source.settings.calendarView, selectedDate: source.settings.selectedDate, hideCompletedFollowUps: source.settings.hideCompletedFollowUps };
     if (!VALID_SECTIONS.has(settings.activeSection) || !VALID_VIEWS.has(settings.calendarView) || !isValidDateKey(settings.selectedDate) || typeof settings.hideCompletedFollowUps !== "boolean") throw new Error("Настройки резервной копии некорректны");
     return { schemaVersion: SCHEMA_VERSION, revision: source.revision, tasks, revenueEntries, monthlyPlans, weeklyPlans, followUps, trash, settings };
+  }
+
+  function normalizeImportedBackup(envelope) {
+    if (!isPlainObject(envelope) || ![1, SCHEMA_VERSION].includes(envelope.schemaVersion) || !isIsoDateTime(envelope.exportedAt) || !isPlainObject(envelope.data)) throw new Error("Файл не является резервной копией поддерживаемой версии");
+    return normalizeAppState(envelope.data, envelope.schemaVersion);
   }
 
   function parseBackupText(text) {
@@ -662,36 +719,36 @@
     return Boolean(entry && entry.status === "expected" && isValidDateKey(entry.expectedDate) && entry.expectedDate < today);
   }
 
-  function calculateDayMetrics(entries, dateKey) {
+  function calculateDayMetrics(entries, dateKey, product = null) {
     return {
-      factKopecks: calculateFact(entries, dateKey, dateKey),
-      expectationKopecks: calculateExpectation(entries, dateKey, dateKey),
+      factKopecks: calculateFact(entries, dateKey, dateKey, product),
+      expectationKopecks: calculateExpectation(entries, dateKey, dateKey, product),
     };
   }
 
-  function calculateWeekMetrics(entries, dateKey, planKopecks = null) {
+  function calculateWeekMetrics(entries, dateKey, planKopecks = null, product = null) {
     const startKey = startOfWeek(dateKey);
     const endKey = endOfWeek(dateKey);
-    const factKopecks = calculateFact(entries, startKey, endKey);
+    const factKopecks = calculateFact(entries, startKey, endKey, product);
     return {
       startKey,
       endKey,
       planKopecks,
       factKopecks,
-      expectationKopecks: calculateExpectation(entries, startKey, endKey),
+      expectationKopecks: calculateExpectation(entries, startKey, endKey, product),
       completion: calculateCompletion(factKopecks, planKopecks),
     };
   }
 
-  function calculateMonthMetrics(entries, dateKey, today = getMoscowDateKey(), planKopecks = null) {
+  function calculateMonthMetrics(entries, dateKey, today = getMoscowDateKey(), planKopecks = null, product = null) {
     const monthKey = getMonthKey(dateKey);
     const currentMonthKey = getMonthKey(today);
     const startKey = `${monthKey}-01`;
     const endKey = endOfMonth(dateKey);
     let factEndKey = endKey;
     if (monthKey === currentMonthKey) factEndKey = today;
-    const factKopecks = monthKey > currentMonthKey ? 0 : calculateFact(entries, startKey, factEndKey);
-    const expectationKopecks = calculateExpectation(entries, startKey, endKey);
+    const factKopecks = monthKey > currentMonthKey ? 0 : calculateFact(entries, startKey, factEndKey, product);
+    const expectationKopecks = calculateExpectation(entries, startKey, endKey, product);
     const runRateKopecks = monthKey === currentMonthKey
       ? calculateRunRate(factKopecks, Number(today.slice(8, 10)), daysInMonth(today))
       : null;
@@ -1029,6 +1086,7 @@
     if (snapshot.status === "valid") {
       state = snapshot.state;
       baseRevision = state.revision;
+      if (snapshot.migrationError) setDirty(true, "Старые данные открыты, но браузер пока не сохранил их в новом формате.");
       return;
     }
     if (snapshot.status === "missing") {
@@ -1311,115 +1369,157 @@
     return item;
   }
 
-  function buildProgressBars(planKopecks, factKopecks, compact = false) {
-    const bars = createElement("div", compact ? "finance-bars finance-bars--compact" : "finance-bars");
-    const planRow = createElement("div", "finance-bar");
-    const planHead = createElement("div", "finance-bar__head");
-    planHead.append(createElement("span", "", "План"), createElement("strong", "", planKopecks ? formatKopecks(planKopecks) : "План не задан"));
-    const planTrack = createElement("div", "finance-bar__track");
-    const planFill = createElement("span", "finance-bar__fill finance-bar__fill--plan");
-    planFill.style.width = planKopecks ? "100%" : "0%";
-    planTrack.append(planFill);
-    planRow.append(planHead, planTrack);
-
-    const factRow = createElement("div", "finance-bar");
-    const factHead = createElement("div", "finance-bar__head");
-    factHead.append(createElement("span", "", "Факт"), createElement("strong", "", formatKopecks(factKopecks)));
-    const factTrack = createElement("div", "finance-bar__track");
-    const factFill = createElement("span", "finance-bar__fill finance-bar__fill--fact");
-    const ratio = planKopecks ? (factKopecks / planKopecks) * 100 : 0;
-    factFill.style.width = `${Math.max(0, Math.min(100, ratio))}%`;
-    factTrack.append(factFill);
-    factRow.append(factHead, factTrack);
-    if (ratio > 100) factRow.append(createElement("span", "finance-bar__excess", `Превышение плана на ${formatPercent(ratio - 100)}`));
-    bars.append(planRow, factRow);
-    return bars;
-  }
-
   function buildPlanButton(type, exists) {
-    const emptyLabel = type === "month" ? "Добавить план месяца" : "Добавить план недели";
-    const button = createElement("button", "button button--secondary", exists ? "Изменить план" : emptyLabel);
+    const button = createElement("button", "button button--secondary", exists ? "Настроить планы" : "Задать планы");
     button.type = "button";
     button.dataset.action = "open-plan";
     button.dataset.planType = type;
     return button;
   }
 
-  function buildMonthSummary() {
-    const selected = state.settings.selectedDate;
-    const monthKey = getMonthKey(selected);
-    const plan = state.monthlyPlans[monthKey]?.amountKopecks ?? null;
-    const metrics = calculateMonthMetrics(state.revenueEntries, selected, getMoscowDateKey(), plan);
-    const card = createElement("article", "summary-card summary-card--primary summary-card--finance");
-    const header = createElement("div", "summary-card__header");
-    const title = createElement("div");
-    title.append(createElement("p", "summary-card__label", "Этот месяц"), createElement("h2", "", capitalize(formatDate(`${monthKey}-01`, { month: "long", year: "numeric" }))));
-    header.append(title, buildPlanButton("month", Boolean(plan)));
-    const metricsGrid = createElement("div", "finance-metrics");
-    metricsGrid.append(
-      buildMetric("План", plan ? formatKopecks(plan) : "План не задан"),
-      buildMetric("Факт", formatKopecks(metrics.factKopecks)),
-      buildMetric("Выполнение", formatPercent(metrics.completion)),
+  function getProductPlanAmount(plan, product) {
+    const amount = plan?.amountsKopecks?.[product];
+    return Number.isInteger(amount) ? amount : null;
+  }
+
+  function sumProductMetrics(metricsByProduct) {
+    return metricsByProduct.reduce((total, item) => ({
+      planKopecks: total.planKopecks + (item.planKopecks ?? 0),
+      factKopecks: total.factKopecks + item.factKopecks,
+      expectationKopecks: total.expectationKopecks + item.expectationKopecks,
+      runRateKopecks: total.runRateKopecks + (item.runRateKopecks ?? 0),
+    }), { planKopecks: 0, factKopecks: 0, expectationKopecks: 0, runRateKopecks: 0 });
+  }
+
+  function buildProductFinanceRow(product, metrics, { showPlan = true, showForecast = false, rowKey = product } = {}) {
+    const planKopecks = showPlan ? metrics.planKopecks : null;
+    const details = createElement("details", `product-finance product-finance--${product}`);
+    details.dataset.financeKey = rowKey;
+    const summary = createElement("summary", "product-finance__summary");
+    summary.title = "Нажмите, чтобы увидеть ожидания и дополнительные показатели";
+    const identity = createElement("span", "product-finance__identity");
+    identity.append(createElement("strong", "", TASK_PRODUCT_LABELS[product] || "Другое"));
+    if (product === "other") identity.append(createElement("span", "product-finance__note", "Без плана"));
+    const headline = createElement("span", "product-finance__headline");
+    if (showPlan) headline.append(
+      createElement("span", "", `План ${planKopecks ? formatKopecks(planKopecks) : "не задан"}`),
+      createElement("strong", "", `Получено ${formatKopecks(metrics.factKopecks)}`),
     );
-    metricsGrid.append(
+    else headline.append(createElement("strong", "", `Получено ${formatKopecks(metrics.factKopecks)}`));
+    summary.append(identity, headline);
+    if (showPlan) {
+      const progress = createElement("span", "product-finance__progress");
+      const fill = createElement("span", "product-finance__progress-fill");
+      const ratio = planKopecks ? (metrics.factKopecks / planKopecks) * 100 : 0;
+      fill.style.width = `${Math.max(0, Math.min(100, ratio))}%`;
+      progress.setAttribute("aria-label", planKopecks ? `Выполнено ${formatPercent(ratio)}` : "План не задан");
+      progress.append(fill);
+      summary.append(progress);
+    }
+    const expanded = createElement("div", "product-finance__details");
+    expanded.append(
+      buildMetric("Жду", formatKopecks(metrics.expectationKopecks)),
+      ...(showPlan ? [buildMetric("Выполнение", formatPercent(metrics.completion))] : []),
+    );
+    if (showForecast) expanded.append(
       metrics.isCurrentMonth
         ? buildMetric("Прогноз", formatKopecks(metrics.runRateKopecks), "К концу месяца")
         : buildMetric("Прогноз", "—", "Только для текущего месяца"),
     );
-    metricsGrid.append(buildMetric("Жду", formatKopecks(metrics.expectationKopecks)));
-    card.append(header, metricsGrid, buildProgressBars(plan, metrics.factKopecks));
-    return card;
+    details.append(summary, expanded);
+    return details;
   }
 
-  function buildWeekSummary() {
+  function buildFinanceTotal(total, { showPlan = true } = {}) {
+    const row = createElement("div", "product-finance-total");
+    row.append(createElement("strong", "", "Итого по двум продуктам"));
+    const values = createElement("span", "product-finance-total__values");
+    if (showPlan) values.append(createElement("span", "", `План ${total.planKopecks ? formatKopecks(total.planKopecks) : "не задан"}`));
+    values.append(
+      createElement("span", "", `Получено ${formatKopecks(total.factKopecks)}`),
+      createElement("span", "", `Жду ${formatKopecks(total.expectationKopecks)}`),
+    );
+    row.append(values);
+    return row;
+  }
+
+  function buildLegacyPlanNotice(plan) {
+    if (!plan?.legacyTotalKopecks) return null;
+    const notice = createElement("p", "legacy-plan-notice");
+    notice.append(
+      createElement("strong", "", `Прежний общий план: ${formatKopecks(plan.legacyTotalKopecks)}.`),
+      document.createTextNode(" Распределите его между двумя продуктами через «Настроить планы».")
+    );
+    return notice;
+  }
+
+  function buildPeriodSummary(type) {
     const selected = state.settings.selectedDate;
-    const info = getIsoWeekInfo(selected);
-    const plan = state.weeklyPlans[info.weekKey]?.amountKopecks ?? null;
-    const metrics = calculateWeekMetrics(state.revenueEntries, selected, plan);
-    const card = createElement("article", "summary-card summary-card--finance summary-card--week");
+    const isMonth = type === "month";
+    const key = isMonth ? getMonthKey(selected) : getIsoWeekInfo(selected).weekKey;
+    const plan = isMonth ? state.monthlyPlans[key] : state.weeklyPlans[key];
+    const metricsByProduct = PLAN_PRODUCTS.map((product) => {
+      const planKopecks = getProductPlanAmount(plan, product);
+      return isMonth
+        ? { product, ...calculateMonthMetrics(state.revenueEntries, selected, getMoscowDateKey(), planKopecks, product) }
+        : { product, ...calculateWeekMetrics(state.revenueEntries, selected, planKopecks, product) };
+    });
+    const otherMetrics = isMonth
+      ? calculateMonthMetrics(state.revenueEntries, selected, getMoscowDateKey(), null, "other")
+      : calculateWeekMetrics(state.revenueEntries, selected, null, "other");
+    const card = createElement("article", `summary-card summary-card--finance summary-card--${type}${isMonth ? " summary-card--primary" : ""}`);
     const header = createElement("div", "summary-card__header");
     const title = createElement("div");
-    title.append(createElement("p", "summary-card__label", "Эта неделя"), createElement("h2", "", formatWeekRange(selected)));
-    header.append(title, buildPlanButton("week", Boolean(plan)));
-    const metricsGrid = createElement("div", "finance-metrics finance-metrics--compact");
-    metricsGrid.append(
-      buildMetric("План", plan ? formatKopecks(plan) : "План не задан"),
-      buildMetric("Факт", formatKopecks(metrics.factKopecks)),
-      buildMetric("Выполнение", formatPercent(metrics.completion)),
-      buildMetric("Жду", formatKopecks(metrics.expectationKopecks)),
+    title.append(
+      createElement("p", "summary-card__label", isMonth ? "Месяц" : "Неделя"),
+      createElement("h2", "", isMonth ? capitalize(formatDate(`${key}-01`, { month: "long", year: "numeric" })) : formatWeekRange(selected)),
     );
-    card.append(header, metricsGrid, buildProgressBars(plan, metrics.factKopecks, true));
+    header.append(title, buildPlanButton(type, Boolean(plan)));
+    const list = createElement("div", "product-finance-list");
+    for (const metrics of metricsByProduct) list.append(buildProductFinanceRow(metrics.product, metrics, { showForecast: isMonth, rowKey: `${type}:${metrics.product}` }));
+    if (otherMetrics.factKopecks || otherMetrics.expectationKopecks) list.append(buildProductFinanceRow("other", otherMetrics, { showPlan: false, rowKey: `${type}:other` }));
+    const legacyNotice = buildLegacyPlanNotice(plan);
+    card.append(header);
+    if (legacyNotice) card.append(legacyNotice);
+    card.append(list, buildFinanceTotal(sumProductMetrics(metricsByProduct)));
     return card;
   }
 
   function buildDaySummary() {
     const dateKey = state.settings.selectedDate;
-    const metrics = calculateDayMetrics(state.revenueEntries, dateKey);
+    const metricsByProduct = PLAN_PRODUCTS.map((product) => ({ product, ...calculateDayMetrics(state.revenueEntries, dateKey, product) }));
+    const otherMetrics = calculateDayMetrics(state.revenueEntries, dateKey, "other");
     const card = createElement("article", "summary-card summary-card--day summary-card--finance");
     const header = createElement("div", "summary-card__header");
     const title = createElement("div");
     title.append(createElement("p", "summary-card__label", "День"), createElement("h2", "", capitalize(formatDate(dateKey, { day: "numeric", month: "long" }))));
     header.append(title);
-    const metricsGrid = createElement("div", "finance-metrics finance-metrics--day");
-    metricsGrid.append(buildMetric("Получено", formatKopecks(metrics.factKopecks)), buildMetric("Жду", formatKopecks(metrics.expectationKopecks)));
-    card.append(header, metricsGrid);
+    const list = createElement("div", "product-finance-list");
+    for (const metrics of metricsByProduct) list.append(buildProductFinanceRow(metrics.product, metrics, { showPlan: false, rowKey: `day:${metrics.product}` }));
+    if (otherMetrics.factKopecks || otherMetrics.expectationKopecks) list.append(buildProductFinanceRow("other", otherMetrics, { showPlan: false, rowKey: "day:other" }));
+    card.append(header, list, buildFinanceTotal(sumProductMetrics(metricsByProduct), { showPlan: false }));
     return card;
   }
 
   function renderFinancialSummary() {
     const view = state.settings.calendarView;
+    const openRows = new Set(Array.from(elements.financialSummary.querySelectorAll(".product-finance[open]"), (item) => item.dataset.financeKey));
+    const replaceSummary = (...cards) => {
+      elements.financialSummary.replaceChildren(...cards);
+      elements.financialSummary.querySelectorAll(".product-finance").forEach((item) => { item.open = openRows.has(item.dataset.financeKey); });
+    };
     if (view === "day") {
       elements.financialSummary.className = "summary-grid summary-grid--day";
-      elements.financialSummary.replaceChildren(buildDaySummary());
+      replaceSummary(buildDaySummary());
       return;
     }
     if (view === "month") {
       elements.financialSummary.className = "summary-grid summary-grid--month";
-      elements.financialSummary.replaceChildren(buildMonthSummary());
+      replaceSummary(buildPeriodSummary("month"));
       return;
     }
     elements.financialSummary.className = "summary-grid";
-    elements.financialSummary.replaceChildren(buildMonthSummary(), buildWeekSummary());
+    replaceSummary(buildPeriodSummary("month"), buildPeriodSummary("week"));
   }
 
   function buildAddTaskButton(dateKey, compact = false) {
@@ -2157,8 +2257,11 @@
   function clearPlanErrors() {
     elements.planErrorSummary.hidden = true;
     elements.planErrorSummary.replaceChildren();
-    setText(document.querySelector("#plan-amount-error"), "");
-    elements.planForm.elements.amount.removeAttribute("aria-invalid");
+    for (const product of PLAN_PRODUCTS) {
+      const input = elements.planForm.elements[product];
+      setText(document.querySelector(`#${input.id}-error`), "");
+      input.removeAttribute("aria-invalid");
+    }
   }
 
   function openPlanForm(type, trigger = document.activeElement) {
@@ -2172,9 +2275,12 @@
     clearPlanErrors();
     form.elements.type.value = type;
     form.elements.key.value = key;
-    form.elements.amount.value = plan ? formatMoneyInput(plan.amountKopecks) : "";
+    for (const product of PLAN_PRODUCTS) form.elements[product].value = getProductPlanAmount(plan, product) ? formatMoneyInput(getProductPlanAmount(plan, product)) : "";
+    const legacyNote = document.querySelector("#legacy-plan-form-note");
+    legacyNote.hidden = !plan?.legacyTotalKopecks;
+    setText(legacyNote, plan?.legacyTotalKopecks ? `Прежний общий план ${formatKopecks(plan.legacyTotalKopecks)} сохранён. Укажите, как он распределяется между продуктами.` : "");
     elements.planReset.hidden = !plan;
-    setText(document.querySelector("#plan-dialog-title"), plan ? "Изменить план" : "Задать план");
+    setText(document.querySelector("#plan-dialog-title"), plan ? "Настроить планы" : "Задать планы");
     setText(
       document.querySelector("#plan-period-label"),
       isMonth
@@ -2182,21 +2288,46 @@
         : `${formatWeekRange(selected)} · ISO-неделя ${info.week}`,
     );
     openDialog(elements.planDialog, trigger);
-    window.requestAnimationFrame(() => form.elements.amount.focus());
+    window.requestAnimationFrame(() => form.elements.vibeCoding.focus());
   }
 
   function submitPlanForm(event) {
     event.preventDefault();
     clearPlanErrors();
     const form = elements.planForm;
-    const money = parseMoneyToKopecks(form.elements.amount.value);
-    if (!money.ok) {
-      const input = form.elements.amount;
+    const amountsKopecks = {};
+    const errors = [];
+    for (const product of PLAN_PRODUCTS) {
+      const input = form.elements[product];
+      const raw = input.value.trim();
+      if (!raw) continue;
+      const money = parseMoneyToKopecks(raw);
+      if (money.ok) {
+        amountsKopecks[product] = money.value;
+        continue;
+      }
       input.setAttribute("aria-invalid", "true");
-      setText(document.querySelector("#plan-amount-error"), money.error);
-      const link = createElement("a", "", `Сумма плана: ${money.error}`);
-      link.href = "#plan-amount";
-      elements.planErrorSummary.replaceChildren(createElement("strong", "", "Проверьте сумму плана"), link);
+      setText(document.querySelector(`#${input.id}-error`), money.error);
+      const item = createElement("li");
+      const link = createElement("a", "", `${TASK_PRODUCT_LABELS[product]}: ${money.error}`);
+      link.href = `#${input.id}`;
+      item.append(link);
+      errors.push(item);
+    }
+    if (!errors.length && !Object.keys(amountsKopecks).length) {
+      const input = form.elements.vibeCoding;
+      input.setAttribute("aria-invalid", "true");
+      setText(document.querySelector("#plan-vibe-coding-error"), "Укажите план хотя бы для одного продукта");
+      const item = createElement("li");
+      const link = createElement("a", "", "Укажите план хотя бы для одного продукта");
+      link.href = "#plan-vibe-coding";
+      item.append(link);
+      errors.push(item);
+    }
+    if (errors.length) {
+      const list = createElement("ul");
+      list.append(...errors);
+      elements.planErrorSummary.replaceChildren(createElement("strong", "", "Проверьте планы"), list);
       elements.planErrorSummary.hidden = false;
       elements.planErrorSummary.focus();
       return;
@@ -2205,9 +2336,9 @@
     const key = form.elements.key.value;
     const now = new Date().toISOString();
     updateState((next) => {
-      if (type === "month") next.monthlyPlans[key] = { monthKey: key, amountKopecks: money.value, updatedAt: now };
-      if (type === "week") next.weeklyPlans[key] = { weekKey: key, startDate: startOfWeek(next.settings.selectedDate), amountKopecks: money.value, updatedAt: now };
-    }, "План сохранён");
+      if (type === "month") next.monthlyPlans[key] = { monthKey: key, amountsKopecks, legacyTotalKopecks: null, updatedAt: now };
+      if (type === "week") next.weeklyPlans[key] = { weekKey: key, startDate: startOfWeek(next.settings.selectedDate), amountsKopecks, legacyTotalKopecks: null, updatedAt: now };
+    }, "Планы сохранены");
     closeDialog(elements.planDialog);
   }
 
@@ -2215,11 +2346,11 @@
     const form = elements.planForm;
     const type = form.elements.type.value;
     const key = form.elements.key.value;
-    if (!window.confirm("Сбросить план для этого периода?")) return;
+    if (!window.confirm("Сбросить оба продуктовых плана для этого периода?")) return;
     updateState((next) => {
       if (type === "month") delete next.monthlyPlans[key];
       if (type === "week") delete next.weeklyPlans[key];
-    }, "План сброшен");
+    }, "Планы сброшены");
     closeDialog(elements.planDialog);
   }
 
@@ -2564,12 +2695,14 @@
       if (event.key !== STORAGE_KEY || event.newValue === null) return;
       let remote;
       try {
-        remote = JSON.parse(event.newValue);
+        const parsed = JSON.parse(event.newValue);
+        remote = normalizeAppState(parsed, parsed?.schemaVersion);
+        if (parsed.schemaVersion === 1) remote.revision += 1;
       } catch (error) {
         showConflict();
         return;
       }
-      if (!isValidAppState(remote) || remote.revision <= baseRevision) return;
+      if (remote.revision <= baseRevision) return;
       const hasOpenDialog = Boolean(document.querySelector("dialog[open]"));
       if (dirty || hasOpenDialog) {
         showConflict(remote);
