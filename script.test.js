@@ -109,3 +109,11 @@ test("резервная копия версии 2 проходит повтор
     aiSkills: 400_000,
   });
 });
+
+test("мини-календарь строит шесть недель с понедельника", () => {
+  const dates = core.getMonthCalendarDates("2026-09-30");
+
+  assert.equal(dates.length, 42);
+  assert.equal(dates[0], "2026-08-31");
+  assert.equal(dates[41], "2026-10-11");
+});

@@ -9,8 +9,8 @@
     />
     <link rel="icon" href="data:," />
     <title>Мой уголок для планов</title>
-    <link rel="stylesheet" href="style.css?v=20260904-2" />
-    <script src="script.js?v=20260904-2" defer></script>
+    <link rel="stylesheet" href="style.css?v=20260930-1" />
+    <script src="script.js?v=20260930-1" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main-content">Перейти к содержимому</a>
@@ -444,15 +444,43 @@
               <input id="revenue-custom-product" name="customProduct" type="text" maxlength="80" aria-describedby="revenue-custom-product-error" />
               <span class="field__error" id="revenue-custom-product-error"></span>
             </div>
-            <div class="field" id="revenue-expected-date-field">
-              <label for="revenue-expected-date">Ожидаемая дата <span aria-hidden="true">*</span></label>
-              <input id="revenue-expected-date" name="expectedDate" type="date" aria-describedby="revenue-expected-date-error" />
+            <div class="field date-picker-field" id="revenue-expected-date-field" data-date-picker>
+              <label for="revenue-expected-date-trigger">Ожидаемая дата <span aria-hidden="true">*</span></label>
+              <input id="revenue-expected-date" name="expectedDate" type="hidden" data-date-picker-input />
+              <button class="date-picker-trigger" id="revenue-expected-date-trigger" type="button" data-date-picker-trigger aria-haspopup="dialog" aria-expanded="false" aria-controls="revenue-expected-date-calendar" aria-describedby="revenue-expected-date-error">
+                <span data-date-picker-value>Выберите дату</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4.5 9h15M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg>
+              </button>
+              <div class="mini-calendar" id="revenue-expected-date-calendar" data-date-picker-popover role="dialog" aria-label="Выбор ожидаемой даты" hidden>
+                <div class="mini-calendar__header">
+                  <button class="mini-calendar__nav" type="button" data-date-picker-previous aria-label="Предыдущий месяц"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg></button>
+                  <strong data-date-picker-title aria-live="polite"></strong>
+                  <button class="mini-calendar__nav" type="button" data-date-picker-next aria-label="Следующий месяц"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></button>
+                </div>
+                <div class="mini-calendar__weekdays" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+                <div class="mini-calendar__grid" data-date-picker-grid role="grid" aria-label="Дни месяца"></div>
+                <button class="mini-calendar__today" type="button" data-date-picker-today>Сегодня</button>
+              </div>
               <span class="field__error" id="revenue-expected-date-error"></span>
             </div>
-            <div class="field" id="revenue-received-date-field" hidden>
-              <label for="revenue-received-date">Фактическая дата <span aria-hidden="true">*</span></label>
-              <input id="revenue-received-date" name="receivedDate" type="date" aria-describedby="revenue-received-date-hint revenue-received-date-error" />
-              <span class="field__hint" id="revenue-received-date-hint">Укажите вручную; будущая дата недоступна.</span>
+            <div class="field date-picker-field" id="revenue-received-date-field" data-date-picker hidden>
+              <label for="revenue-received-date-trigger">Фактическая дата <span aria-hidden="true">*</span></label>
+              <input id="revenue-received-date" name="receivedDate" type="hidden" data-date-picker-input />
+              <button class="date-picker-trigger" id="revenue-received-date-trigger" type="button" data-date-picker-trigger aria-haspopup="dialog" aria-expanded="false" aria-controls="revenue-received-date-calendar" aria-describedby="revenue-received-date-hint revenue-received-date-error">
+                <span data-date-picker-value>Выберите дату</span>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v3M17 3v3M4.5 9h15M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Z" /></svg>
+              </button>
+              <div class="mini-calendar" id="revenue-received-date-calendar" data-date-picker-popover role="dialog" aria-label="Выбор фактической даты" hidden>
+                <div class="mini-calendar__header">
+                  <button class="mini-calendar__nav" type="button" data-date-picker-previous aria-label="Предыдущий месяц"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg></button>
+                  <strong data-date-picker-title aria-live="polite"></strong>
+                  <button class="mini-calendar__nav" type="button" data-date-picker-next aria-label="Следующий месяц"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg></button>
+                </div>
+                <div class="mini-calendar__weekdays" aria-hidden="true"><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span>Вс</span></div>
+                <div class="mini-calendar__grid" data-date-picker-grid role="grid" aria-label="Дни месяца"></div>
+                <button class="mini-calendar__today" type="button" data-date-picker-today>Сегодня</button>
+              </div>
+              <span class="field__hint" id="revenue-received-date-hint">Выберите в календаре; будущие даты недоступны.</span>
               <span class="field__error" id="revenue-received-date-error"></span>
             </div>
           </div>

@@ -145,6 +145,13 @@
     return `${getMonthKey(dateKey)}-01`;
   }
 
+  function getMonthCalendarDates(dateKey) {
+    const first = startOfMonth(dateKey);
+    const mondayOffset = (parseDateKey(first).getUTCDay() + 6) % 7;
+    const gridStart = addDays(first, -mondayOffset);
+    return Array.from({ length: 42 }, (_, index) => addDays(gridStart, index));
+  }
+
   function daysInMonth(dateKey) {
     const date = parseDateKey(dateKey);
     if (!date) throw new TypeError("Некорректная дата");
@@ -801,6 +808,7 @@
     endOfWeek,
     getMonthKey,
     startOfMonth,
+    getMonthCalendarDates,
     endOfMonth,
     daysInMonth,
     getIsoWeekInfo,
@@ -1121,6 +1129,202 @@
 
   function capitalize(value) {
     return value ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+  }
+
+  function getDatePickerInput(root) {
+    return root?.querySelector("[data-date-picker-input]") || null;
+  }
+
+  function isDatePickerValueAllowed(input, dateKey) {
+    return Boolean(
+      input &&
+      isValidDateKey(dateKey) &&
+      (!input.min || dateKey >= input.min) &&
+      (!input.max || dateKey <= input.max)
+    );
+  }
+
+  function syncDatePicker(root) {
+    const input = getDatePickerInput(root);
+    const value = root?.querySelector("[data-date-picker-value]");
+    if (!input || !value) return;
+    setText(
+      value,
+      isValidDateKey(input.value)
+        ? formatDate(input.value, { day: "2-digit", month: "2-digit", year: "numeric" })
+        : "Выберите дату",
+    );
+  }
+
+  function closeDatePicker(root, { restoreFocus = false } = {}) {
+    const popover = root?.querySelector("[data-date-picker-popover]");
+    const trigger = root?.querySelector("[data-date-picker-trigger]");
+    if (!popover || popover.hidden) return;
+    popover.hidden = true;
+    trigger?.setAttribute("aria-expanded", "false");
+    if (restoreFocus) trigger?.focus();
+  }
+
+  function closeAllDatePickers(exceptRoot = null) {
+    document.querySelectorAll("[data-date-picker]").forEach((root) => {
+      if (root !== exceptRoot) closeDatePicker(root);
+    });
+  }
+
+  function monthHasAllowedDate(input, monthDateKey) {
+    const first = startOfMonth(monthDateKey);
+    const last = endOfMonth(monthDateKey);
+    return (!input.min || last >= input.min) && (!input.max || first <= input.max);
+  }
+
+  function renderDatePicker(root, preferredFocusDate = null) {
+    const input = getDatePickerInput(root);
+    const grid = root?.querySelector("[data-date-picker-grid]");
+    const title = root?.querySelector("[data-date-picker-title]");
+    if (!input || !grid || !title) return;
+    const fallbackDate = isValidDateKey(input.value) ? input.value : getMoscowDateKey();
+    const viewDate = isValidDateKey(root.dataset.viewDate) ? root.dataset.viewDate : startOfMonth(fallbackDate);
+    root.dataset.viewDate = startOfMonth(viewDate);
+    setText(title, capitalize(formatDate(root.dataset.viewDate, { month: "long", year: "numeric" })));
+
+    const dates = getMonthCalendarDates(root.dataset.viewDate);
+    const allowedDates = dates.filter((dateKey) => isDatePickerValueAllowed(input, dateKey));
+    const focusDate = [preferredFocusDate, input.value, getMoscowDateKey(), ...allowedDates]
+      .find((dateKey) => dates.includes(dateKey) && isDatePickerValueAllowed(input, dateKey));
+    const fragment = document.createDocumentFragment();
+    for (const dateKey of dates) {
+      const button = createElement("button", "mini-calendar__day", String(parseDateKey(dateKey).getUTCDate()));
+      button.type = "button";
+      button.dataset.datePickerDay = dateKey;
+      button.setAttribute("role", "gridcell");
+      button.setAttribute("aria-label", capitalize(formatDate(dateKey, { weekday: "long", day: "numeric", month: "long", year: "numeric" })));
+      button.tabIndex = dateKey === focusDate ? 0 : -1;
+      if (getMonthKey(dateKey) !== getMonthKey(root.dataset.viewDate)) button.classList.add("is-outside");
+      if (dateKey === getMoscowDateKey()) button.classList.add("is-today");
+      if (dateKey === input.value) {
+        button.classList.add("is-selected");
+        button.setAttribute("aria-selected", "true");
+      } else {
+        button.setAttribute("aria-selected", "false");
+      }
+      button.disabled = !isDatePickerValueAllowed(input, dateKey);
+      fragment.append(button);
+    }
+    grid.replaceChildren(fragment);
+
+    const previousDate = shiftMonth(root.dataset.viewDate, -1);
+    const nextDate = shiftMonth(root.dataset.viewDate, 1);
+    root.querySelector("[data-date-picker-previous]").disabled = !monthHasAllowedDate(input, previousDate);
+    root.querySelector("[data-date-picker-next]").disabled = !monthHasAllowedDate(input, nextDate);
+    const todayButton = root.querySelector("[data-date-picker-today]");
+    todayButton.disabled = !isDatePickerValueAllowed(input, getMoscowDateKey());
+  }
+
+  function openDatePicker(root) {
+    const trigger = root?.querySelector("[data-date-picker-trigger]");
+    const popover = root?.querySelector("[data-date-picker-popover]");
+    const input = getDatePickerInput(root);
+    if (!trigger || !popover || !input || trigger.disabled) return;
+    closeAllDatePickers(root);
+    root.dataset.viewDate = startOfMonth(isValidDateKey(input.value) ? input.value : getMoscowDateKey());
+    renderDatePicker(root);
+    popover.hidden = false;
+    trigger.setAttribute("aria-expanded", "true");
+    window.requestAnimationFrame(() => gridFocusTarget(root)?.focus());
+  }
+
+  function gridFocusTarget(root) {
+    return root?.querySelector('[data-date-picker-day][tabindex="0"]') ||
+      root?.querySelector("[data-date-picker-day]:not([disabled])") || null;
+  }
+
+  function focusDatePickerDate(root, dateKey) {
+    const input = getDatePickerInput(root);
+    if (!isDatePickerValueAllowed(input, dateKey)) return;
+    root.dataset.viewDate = startOfMonth(dateKey);
+    renderDatePicker(root, dateKey);
+    window.requestAnimationFrame(() => {
+      root.querySelector(`[data-date-picker-day="${dateKey}"]`)?.focus();
+    });
+  }
+
+  function chooseDatePickerValue(root, dateKey) {
+    const input = getDatePickerInput(root);
+    if (!isDatePickerValueAllowed(input, dateKey)) return;
+    input.value = dateKey;
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    syncDatePicker(root);
+    closeDatePicker(root, { restoreFocus: true });
+  }
+
+  function handleDatePickerKeydown(event, root) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeDatePicker(root, { restoreFocus: true });
+      return;
+    }
+    const activeDay = event.target.closest("[data-date-picker-day]");
+    if (!activeDay) return;
+    const sourceDate = activeDay.dataset.datePickerDay;
+    const source = parseDateKey(sourceDate);
+    const weekday = (source.getUTCDay() + 6) % 7;
+    const movements = {
+      ArrowLeft: addDays(sourceDate, -1),
+      ArrowRight: addDays(sourceDate, 1),
+      ArrowUp: addDays(sourceDate, -7),
+      ArrowDown: addDays(sourceDate, 7),
+      Home: addDays(sourceDate, -weekday),
+      End: addDays(sourceDate, 6 - weekday),
+      PageUp: shiftMonth(sourceDate, -1),
+      PageDown: shiftMonth(sourceDate, 1),
+    };
+    const targetDate = movements[event.key];
+    if (!targetDate) return;
+    event.preventDefault();
+    focusDatePickerDate(root, targetDate);
+  }
+
+  function initializeDatePickers() {
+    document.querySelectorAll("[data-date-picker]").forEach((root) => {
+      const trigger = root.querySelector("[data-date-picker-trigger]");
+      trigger.addEventListener("click", () => {
+        const popover = root.querySelector("[data-date-picker-popover]");
+        if (popover.hidden) openDatePicker(root);
+        else closeDatePicker(root, { restoreFocus: true });
+      });
+      root.addEventListener("click", (event) => {
+        const day = event.target.closest("[data-date-picker-day]");
+        if (day) {
+          chooseDatePickerValue(root, day.dataset.datePickerDay);
+          return;
+        }
+        if (event.target.closest("[data-date-picker-previous]")) {
+          root.dataset.viewDate = shiftMonth(root.dataset.viewDate, -1);
+          renderDatePicker(root);
+          return;
+        }
+        if (event.target.closest("[data-date-picker-next]")) {
+          root.dataset.viewDate = shiftMonth(root.dataset.viewDate, 1);
+          renderDatePicker(root);
+          return;
+        }
+        if (event.target.closest("[data-date-picker-today]")) chooseDatePickerValue(root, getMoscowDateKey());
+      });
+      root.addEventListener("keydown", (event) => handleDatePickerKeydown(event, root));
+      syncDatePicker(root);
+    });
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest("[data-date-picker]")) closeAllDatePickers();
+    });
+  }
+
+  function setDatePickerDisabled(input, disabled) {
+    const root = input?.closest("[data-date-picker]");
+    const trigger = root?.querySelector("[data-date-picker-trigger]");
+    if (trigger) trigger.disabled = disabled;
+    if (disabled) closeDatePicker(root);
+    syncDatePicker(root);
   }
 
   function formatWeekRange(dateKey) {
@@ -2116,6 +2320,10 @@
       expectedInput.readOnly = true;
       receivedInput.readOnly = true;
     }
+    setDatePickerDisabled(expectedInput, status === "cancelled");
+    setDatePickerDisabled(receivedInput, status === "cancelled");
+    if (elements.revenueExpectedDateField.hidden) closeDatePicker(elements.revenueExpectedDateField);
+    if (elements.revenueReceivedDateField.hidden) closeDatePicker(elements.revenueReceivedDateField);
     form.dataset.visibleStatus = status;
   }
 
@@ -2146,6 +2354,8 @@
     setText(document.querySelector("#revenue-dialog-title"), entry ? "Редактировать оплату" : "Добавить оплату");
     setRevenueProductVisibility();
     setRevenueDateVisibility();
+    syncDatePicker(elements.revenueExpectedDateField);
+    syncDatePicker(elements.revenueReceivedDateField);
     openDialog(elements.revenueDialog, trigger);
     window.requestAnimationFrame(() => form.elements.amount.focus());
   }
@@ -2162,7 +2372,8 @@
     };
     const list = createElement("ul");
     for (const [field, message] of Object.entries(errors)) {
-      const control = elements.revenueForm.elements[field];
+      const input = elements.revenueForm.elements[field];
+      const control = input?.closest("[data-date-picker]")?.querySelector("[data-date-picker-trigger]") || input;
       const errorNode = document.querySelector(`#revenue-${field.replace(/[A-Z]/g, (char) => `-${char.toLowerCase()}`)}-error`);
       if (errorNode) setText(errorNode, message);
       if (control) control.setAttribute("aria-invalid", "true");
@@ -2502,6 +2713,7 @@
   }
 
   function bindEvents() {
+    initializeDatePickers();
     document.addEventListener("click", (event) => {
       const sectionButton = event.target.closest("[data-section]");
       if (sectionButton) {
@@ -2685,7 +2897,10 @@
     document.querySelectorAll("dialog").forEach((dialog) => dialog.addEventListener("keydown", trapDialogFocus));
     elements.settingsDialog.addEventListener("close", restoreDialogFocus);
     elements.taskDialog.addEventListener("close", restoreDialogFocus);
-    elements.revenueDialog.addEventListener("close", restoreDialogFocus);
+    elements.revenueDialog.addEventListener("close", (event) => {
+      closeAllDatePickers();
+      restoreDialogFocus(event);
+    });
     elements.planDialog.addEventListener("close", restoreDialogFocus);
     elements.followUpDialog.addEventListener("close", restoreDialogFocus);
     elements.dataConfirmDialog.addEventListener("close", () => { restoreDialogFocus({ currentTarget: elements.dataConfirmDialog }); pendingImportedState = null; pendingDataOperation = null; });

@@ -1739,6 +1739,166 @@ h2 {
   resize: vertical;
 }
 
+.date-picker-field {
+  position: relative;
+}
+
+.date-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 11px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: #fff;
+  color: var(--color-ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.date-picker-trigger:hover {
+  border-color: rgb(73 103 117 / 0.62);
+}
+
+.date-picker-trigger:focus-visible,
+.mini-calendar button:focus-visible {
+  outline: 3px solid rgb(73 103 117 / 0.28);
+  outline-offset: 2px;
+}
+
+.date-picker-trigger[aria-invalid="true"] {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 1px var(--color-danger);
+}
+
+.date-picker-trigger[disabled] {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.date-picker-trigger svg,
+.mini-calendar__nav svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.mini-calendar {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 7px);
+  right: 0;
+  width: min(320px, calc(100vw - 56px));
+  padding: 12px;
+  border: 1px solid rgb(73 103 117 / 0.28);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 42px rgb(47 54 56 / 0.2);
+}
+
+.mini-calendar__header {
+  display: grid;
+  align-items: center;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 6px;
+}
+
+.mini-calendar__header strong {
+  text-align: center;
+}
+
+.mini-calendar__nav,
+.mini-calendar__day,
+.mini-calendar__today {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mini-calendar__nav {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.mini-calendar__weekdays,
+.mini-calendar__grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.mini-calendar__weekdays {
+  margin-top: 4px;
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mini-calendar__weekdays span {
+  padding: 6px 0 4px;
+}
+
+.mini-calendar__day {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mini-calendar__nav:hover,
+.mini-calendar__day:hover:not(:disabled),
+.mini-calendar__today:hover {
+  background: rgb(169 190 199 / 0.2);
+}
+
+.mini-calendar__day.is-outside {
+  color: var(--color-muted);
+  opacity: 0.68;
+}
+
+.mini-calendar__day.is-today {
+  box-shadow: inset 0 0 0 1px rgb(73 103 117 / 0.5);
+  font-weight: 800;
+}
+
+.mini-calendar__day.is-selected {
+  background: var(--color-blue-deep);
+  color: #fff;
+  font-weight: 800;
+}
+
+.mini-calendar__day.is-selected:hover {
+  background: var(--color-blue-deep);
+}
+
+.mini-calendar__day:disabled {
+  cursor: not-allowed;
+  opacity: 0.28;
+  text-decoration: line-through;
+}
+
+.mini-calendar__today {
+  min-height: 40px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  color: var(--color-blue-deep);
+  font-weight: 750;
+}
+
 .field input[aria-invalid="true"],
 .field select[aria-invalid="true"],
 .field textarea[aria-invalid="true"] {
